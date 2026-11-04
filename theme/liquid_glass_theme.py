@@ -18,6 +18,7 @@ _CURRENT_MODE = globals().get("_CURRENT_MODE", "gray")
 _THEME_PALETTES = {
     "gray": {
         "win_bg": "#D5DBE5",
+        "viewport_bg": "#DCE2EC",
         "card_bg": "#E4E8F0",
         "alt_bg": "#DCE1EB",
         "header_bg": "#C8D0DE",
@@ -38,7 +39,10 @@ _THEME_PALETTES = {
         "table_th_bg": "#CFD6E3",
         "scroll_thumb": "rgba(100, 116, 145, 0.48)",
         "scroll_hover": "rgba(75, 92, 122, 0.75)",
-        "canvas_rgb": (0.835, 0.859, 0.898, 1.0),
+        "canvas_rgb": (0.863, 0.886, 0.925, 1.0),
+        "sideview_rgb": (1.0, 1.0, 1.0, 1.0),
+        "status_bg": (0.835, 0.859, 0.898, 1.0),
+        "status_text": (29, 29, 31, 255),
         "silhouette_color": "#2C2C2E",
         "dwm_dark": 0,
         "dwm_caption": 0x00E5DBD5,
@@ -48,6 +52,7 @@ _THEME_PALETTES = {
     },
     "dark": {
         "win_bg": "#1C1C1E",
+        "viewport_bg": "#0D0E11",
         "card_bg": "#2C2C2E",
         "alt_bg": "#242426",
         "header_bg": "#25262B",
@@ -68,7 +73,10 @@ _THEME_PALETTES = {
         "table_th_bg": "#34353B",
         "scroll_thumb": "rgba(160, 170, 190, 0.38)",
         "scroll_hover": "rgba(190, 200, 220, 0.62)",
-        "canvas_rgb": (0.110, 0.110, 0.118, 1.0),
+        "canvas_rgb": (0.051, 0.055, 0.067, 1.0),
+        "sideview_rgb": (0.086, 0.090, 0.106, 1.0),
+        "status_bg": (0.110, 0.110, 0.118, 1.0),
+        "status_text": (245, 245, 247, 255),
         "silhouette_color": "#E5E5EA",
         "dwm_dark": 1,
         "dwm_caption": 0x001E1C1C,
@@ -1347,43 +1355,128 @@ def apply_light_to_all_html_views(session=None):
     bg_qcol = QtGui.QColor(r, g, b)
     js_code = build_log_js(pal)
     from chimerax.ui.widgets.htmlview import HtmlView
+    cur_mode = get_current_mode()
+    if hasattr(session, "logger") and hasattr(session.logger, "logs"):
+        for lg in session.logger.logs:
+            if hasattr(lg, "_actually_show") and getattr(lg, "_mac_shown_mode", None) != cur_mode:
+                try:
+                    lg._actually_show()
+                    lg._mac_shown_mode = cur_mode
+                except Exception:
+                    pass
     for hv in win.findChildren(HtmlView):
         page = hv.page()
         if page:
             page.setBackgroundColor(bg_qcol)
             page.runJavaScript(js_code)
-    if hasattr(session, "logger") and hasattr(session.logger, "logs"):
-        for lg in session.logger.logs:
-            if hasattr(lg, "_actually_show") and getattr(lg, "_mac_shown_mode", None) != _CURRENT_MODE:
-                try:
-                    lg._actually_show()
-                    lg._mac_shown_mode = _CURRENT_MODE
-                except Exception:
-                    pass
 def configure_3d_canvas(session):
     if session:
         try:
             pal = get_palette_dict()
-            run(session, f"set bg {pal['win_bg']}")
+            run(session, f"set bg {pal['viewport_bg']}")
             run(session, "lighting soft")
             run(session, f"graphics silhouettes true color {pal['silhouette_color']} width 1.2")
             run(session, "color byhetero")
         except Exception:
             pass
 try:
+    from chimerax.graphics import Drawing
+    from chimerax.graphics.drawing import rgba_drawing
+    import numpy as _np
+    class MacRoundedFrameOverlay(Drawing):
+        def __init__(self, name="mac_viewport_frame", is_sideview=False):
+            super().__init__(name)
+            self.use_lighting = False
+            self.is_sideview = is_sideview
+            self._last_key = None
+        def draw(self, renderer, draw_pass):
+            if getattr(renderer, "image_save", False):
+                return
+            try:
+                ww, wh = renderer.render_size()
+                if ww <= 24 or wh <= 24:
+                    return
+                pal = get_palette_dict()
+                outer_col = pal["card_bg"] if self.is_sideview else pal["win_bg"]
+                border_col = pal["border_soft"] if self.is_sideview else pal["border"]
+                key = (ww, wh, outer_col, border_col, self.is_sideview)
+                if self._last_key != key:
+                    self._last_key = key
+                    img = QtGui.QImage(ww, wh, QtGui.QImage.Format.Format_RGBA8888)
+                    img.fill(QtGui.QColor(outer_col))
+                    p = QtGui.QPainter(img)
+                    p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+                    p.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_Clear)
+                    path = QtGui.QPainterPath()
+                    if self.is_sideview:
+                        rect = QtCore.QRectF(4.0, 4.0, float(ww - 8), float(wh - 6))
+                        rad = 10.0
+                        bw = 1.2
+                    else:
+                        rect = QtCore.QRectF(8.0, 3.0, float(ww - 12), float(wh - 7))
+                        rad = 16.0
+                        bw = 1.5
+                    path.addRoundedRect(rect, rad, rad)
+                    p.fillPath(path, QtCore.Qt.GlobalColor.transparent)
+                    p.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceOver)
+                    pen = QtGui.QPen(QtGui.QColor(border_col))
+                    pen.setWidthF(bw)
+                    p.setPen(pen)
+                    p.drawPath(path)
+                    p.end()
+                    ptr = img.constBits()
+                    ptr.setsize(img.sizeInBytes())
+                    arr = _np.frombuffer(ptr, dtype=_np.uint8).reshape((wh, img.bytesPerLine() // 4, 4))[:, :ww, :]
+                    arr = _np.ascontiguousarray(arr[::-1, :, :])
+                    rgba_drawing(self, arr, pos=(-1, -1), size=(2, 2), opaque=False)
+            except Exception:
+                return
+            super().draw(renderer, draw_pass)
+except Exception:
+    MacRoundedFrameOverlay = None
+def install_viewport_rounded_frame(session=None):
+    if not session or not hasattr(session, "main_view") or not session.main_view or MacRoundedFrameOverlay is None:
+        return
+    mv = session.main_view
+    try:
+        old_ovs = [o for o in getattr(mv, "_overlays", []) if getattr(o, "name", "") == "mac_viewport_frame"]
+        if old_ovs:
+            for o in old_ovs:
+                o._last_key = None
+        else:
+            mv.add_overlay(MacRoundedFrameOverlay("mac_viewport_frame", is_sideview=False))
+        mv.redraw_needed = True
+    except Exception:
+        pass
+try:
     from chimerax.sideview.tool import SideViewCanvas, OrthoOverlay
-    if getattr(SideViewCanvas, "_mac_patch_ver", 0) != 2:
-        _orig_sv_render = getattr(SideViewCanvas, "_orig_mac_sv_render", SideViewCanvas.render)
-        SideViewCanvas._orig_mac_sv_render = _orig_sv_render
+    if getattr(SideViewCanvas, "_mac_patch_ver", 0) != 3:
+        _raw_sv_render = getattr(SideViewCanvas, "_true_orig_sv_render", SideViewCanvas.render)
+        while getattr(_raw_sv_render, "__closure__", None):
+            _found_inner = False
+            for _cell in _raw_sv_render.__closure__:
+                _c = _cell.cell_contents
+                if callable(_c) and getattr(_c, "__name__", "") in ("render", "_mac_sv_render"):
+                    _raw_sv_render = _c
+                    _found_inner = True
+                    break
+            if not _found_inner:
+                break
+        SideViewCanvas._true_orig_sv_render = _raw_sv_render
         def _mac_sv_render(self):
             try:
                 if self.view is not None:
-                    self.view.set_background_color(get_palette_dict()["canvas_rgb"])
+                    from numpy import array, float32
+                    self.view._background_rgba = array(get_palette_dict()["sideview_rgb"], dtype=float32)
+                    if MacRoundedFrameOverlay is not None:
+                        has_frame = any(getattr(o, "name", "") == "mac_sideview_frame" for o in getattr(self.view, "_overlays", []))
+                        if not has_frame:
+                            self.view.add_overlay(MacRoundedFrameOverlay("mac_sideview_frame", is_sideview=True))
             except Exception:
                 pass
-            return _orig_sv_render(self)
+            return _raw_sv_render(self)
         SideViewCanvas.render = _mac_sv_render
-        SideViewCanvas._mac_patch_ver = 2
+        SideViewCanvas._mac_patch_ver = 3
     if not hasattr(OrthoOverlay, "_mac_light_patched"):
         _orig_ortho_draw = OrthoOverlay.draw
         def _mac_ortho_draw(self, renderer, draw_pass):
@@ -1404,6 +1497,26 @@ try:
             return _orig_ortho_draw(self, renderer, draw_pass)
         OrthoOverlay.draw = _mac_ortho_draw
         OrthoOverlay._mac_light_patched = True
+except Exception:
+    pass
+try:
+    from chimerax.ui.statusbar import _StatusBarOpenGL
+    if getattr(_StatusBarOpenGL, "_mac_patch_ver", 0) != 2:
+        _orig_sb_set_colors = getattr(_StatusBarOpenGL, "_orig_mac_set_colors", _StatusBarOpenGL.set_colors)
+        _StatusBarOpenGL._orig_mac_set_colors = _orig_sb_set_colors
+        def _mac_sb_set_colors(self):
+            pal = get_palette_dict()
+            self.background_color = pal["status_bg"]
+            self.text_color = pal["status_text"]
+            if self._opengl_context is None:
+                return
+            from chimerax.graphics import remember_current_opengl_context, restore_current_opengl_context
+            cc = remember_current_opengl_context()
+            if self._renderer.make_current():
+                self._renderer.set_background_color(self.background_color)
+            restore_current_opengl_context(cc)
+        _StatusBarOpenGL.set_colors = _mac_sb_set_colors
+        _StatusBarOpenGL._mac_patch_ver = 2
 except Exception:
     pass
 try:
@@ -1449,10 +1562,26 @@ def apply_light_to_sideview_and_sequences(session=None):
                 if hasattr(sc, "_reformat"):
                     sc._reformat()
             if hasattr(tool, "opengl_canvas") and hasattr(tool, "view") and tool.view is not None:
-                tool.view.set_background_color(pal["canvas_rgb"])
-                tool.opengl_canvas._redraw()
+                from numpy import array, float32
+                tool.view._background_rgba = array(pal["sideview_rgb"], dtype=float32)
+                if MacRoundedFrameOverlay is not None:
+                    old_ovs = [o for o in getattr(tool.view, "_overlays", []) if getattr(o, "name", "") == "mac_sideview_frame"]
+                    if old_ovs:
+                        for o in old_ovs:
+                            o._last_key = None
+                    else:
+                        tool.view.add_overlay(MacRoundedFrameOverlay("mac_sideview_frame", is_sideview=True))
+                tool.opengl_canvas.render()
         except Exception:
             pass
+    if hasattr(session, "ui") and hasattr(session.ui, "main_window") and session.ui.main_window:
+        sbar = getattr(session.ui.main_window, "_status_bar", None)
+        if sbar and hasattr(sbar, "set_colors"):
+            try:
+                sbar.set_colors()
+                sbar.status(getattr(sbar, "_last_message", ""), getattr(sbar, "_last_color", "CanvasText"))
+            except Exception:
+                pass
 def apply_theme(session=None, mode=None):
     global _CURRENT_MODE
     set_current_mode(mode if mode is not None else get_current_mode())
@@ -1514,10 +1643,12 @@ def apply_theme(session=None, mode=None):
     apply_light_to_all_html_views(session)
     apply_light_to_sideview_and_sequences(session)
     configure_3d_canvas(session)
+    install_viewport_rounded_frame(session)
     QtCore.QTimer.singleShot(150, lambda: apply_mac_icons_to_all_tabs(session))
     QtCore.QTimer.singleShot(200, lambda: install_dock_traffic_lights(session))
     QtCore.QTimer.singleShot(250, lambda: apply_light_to_all_html_views(session))
     QtCore.QTimer.singleShot(300, lambda: apply_light_to_sideview_and_sequences(session))
+    QtCore.QTimer.singleShot(350, lambda: install_viewport_rounded_frame(session))
     if not getattr(app, "_mac_tabs_hooked", False):
         for tw in app.findChildren(QtWidgets.QTabWidget):
             try:
@@ -1528,6 +1659,7 @@ def apply_theme(session=None, mode=None):
     if session and hasattr(session, "triggers") and not getattr(session, "_mac_triggers_added", False):
         def on_session_restored(*args):
             QtCore.QTimer.singleShot(80, lambda: configure_3d_canvas(session))
+            QtCore.QTimer.singleShot(100, lambda: install_viewport_rounded_frame(session))
             QtCore.QTimer.singleShot(120, lambda: apply_mac_icons_to_all_tabs(session))
             QtCore.QTimer.singleShot(160, lambda: install_dock_traffic_lights(session))
             QtCore.QTimer.singleShot(200, lambda: apply_light_to_all_html_views(session))
