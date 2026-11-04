@@ -5,7 +5,18 @@ from Qt import QtWidgets, QtGui, QtCore
 from chimerax.core.commands import register, CmdDesc, StringArg, run
 from chimerax.core.colors import set_default_color_scheme
 
-ICONS_DIR = r"C:\Users\Parfion\Downloads\chimerax_mac_icons"
+try:
+    set_default_color_scheme("light")
+except Exception:
+    pass
+
+_CANDIDATE_ICON_DIRS = (
+    r"C:\Users\Parfion\Downloads\chimerax_mac_icons",
+    os.path.expanduser("~/Downloads/chimerax_mac_icons"),
+    os.path.expanduser("~/chimerax_start/icons"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons") if "__file__" in globals() else "",
+)
+ICONS_DIR = next((d for d in _CANDIDATE_ICON_DIRS if d and os.path.exists(d)), _CANDIDATE_ICON_DIRS[0])
 _EXISTING_ICONS = frozenset(os.listdir(ICONS_DIR)) if os.path.exists(ICONS_DIR) else frozenset()
 _QICON_CACHE = {}
 
@@ -213,10 +224,28 @@ def resolve_mac_icon(title, description="", section="", tab=""):
 def apply_win11_rounded_corners(widget):
     try:
         hwnd = int(widget.winId())
+        dwm = ctypes.windll.dwmapi.DwmSetWindowAttribute
         pref = ctypes.c_int(2)
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(pref), ctypes.sizeof(pref))
+        dwm(hwnd, 33, ctypes.byref(pref), ctypes.sizeof(pref))
+        dark = ctypes.c_int(0)
+        dwm(hwnd, 20, ctypes.byref(dark), ctypes.sizeof(dark))
+        cap_color = ctypes.c_int(0x00F7F5F5)
+        dwm(hwnd, 35, ctypes.byref(cap_color), ctypes.sizeof(cap_color))
+        txt_color = ctypes.c_int(0x001F1D1D)
+        dwm(hwnd, 36, ctypes.byref(txt_color), ctypes.sizeof(txt_color))
     except Exception:
         pass
+
+class MacGlobalWindowPolishFilter(QtCore.QObject):
+    def eventFilter(self, obj, event):
+        try:
+            if event.type() == QtCore.QEvent.Type.Show and isinstance(obj, QtWidgets.QWidget):
+                if obj.isWindow() and not getattr(obj, "_mac_dwm_styled", False):
+                    obj._mac_dwm_styled = True
+                    QtCore.QTimer.singleShot(10, lambda w=obj: apply_win11_rounded_corners(w))
+        except Exception:
+            pass
+        return False
 
 class MacTrafficLightButton(QtWidgets.QAbstractButton):
     def __init__(self, fill_color, border_color, hover_color, glyph="", diameter=12, parent=None):
@@ -740,6 +769,114 @@ QCheckBox::indicator:checked {
     background-color: #007AFF;
     border-color: #007AFF;
 }
+QRadioButton {
+    spacing: 6px;
+    color: #1D1D1F;
+}
+QRadioButton::indicator {
+    width: 15px;
+    height: 15px;
+    border-radius: 8px;
+    border: 1.5px solid #B8C7DD;
+    background-color: #FFFFFF;
+}
+QRadioButton::indicator:hover {
+    border-color: #007AFF;
+}
+QRadioButton::indicator:checked {
+    background-color: #FFFFFF;
+    border: 4.5px solid #007AFF;
+}
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #E2E8F2;
+    border-radius: 3px;
+}
+QSlider::sub-page:horizontal {
+    background: #007AFF;
+    border-radius: 3px;
+}
+QSlider::add-page:horizontal {
+    background: #E2E8F2;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #FFFFFF;
+    border: 1.5px solid #007AFF;
+    width: 15px;
+    height: 15px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+QSlider::handle:horizontal:hover {
+    background: #F4F8FF;
+    border: 2px solid #0051D5;
+}
+QSlider::groove:vertical {
+    width: 6px;
+    background: #E2E8F2;
+    border-radius: 3px;
+}
+QSlider::sub-page:vertical {
+    background: #E2E8F2;
+    border-radius: 3px;
+}
+QSlider::add-page:vertical {
+    background: #007AFF;
+    border-radius: 3px;
+}
+QSlider::handle:vertical {
+    background: #FFFFFF;
+    border: 1.5px solid #007AFF;
+    width: 15px;
+    height: 15px;
+    margin: 0 -5px;
+    border-radius: 8px;
+}
+QSlider::handle:vertical:hover {
+    background: #F4F8FF;
+    border: 2px solid #0051D5;
+}
+QProgressBar {
+    background-color: #E8EEF7;
+    border: 1px solid #D5DFEE;
+    border-radius: 7px;
+    text-align: center;
+    color: #1D1D1F;
+    font-size: 10px;
+    font-weight: 600;
+    min-height: 14px;
+}
+QProgressBar::chunk {
+    background-color: #007AFF;
+    border-radius: 6px;
+}
+QDialog, QMessageBox {
+    background-color: #F5F5F7;
+    color: #1D1D1F;
+}
+QTabWidget::pane {
+    background: #FFFFFF;
+    border: 1px solid #D5DFEE;
+    border-radius: 12px;
+    padding: 4px;
+}
+QTabBar::tab {
+    background: rgba(186, 203, 230, 0.22);
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 5px 14px;
+    margin: 2px 3px;
+    color: rgba(60, 60, 67, 0.75);
+    font-weight: 500;
+    font-size: 11px;
+}
+QTabBar::tab:selected {
+    background: #FFFFFF;
+    border: 1px solid #D0DCF0;
+    color: #1D1D1F;
+    font-weight: 600;
+}
 QPushButton {
     background-color: #F4F6FB;
     border: 1px solid #D8E1F0;
@@ -1136,11 +1273,100 @@ def configure_3d_canvas(session):
         except Exception:
             pass
 
+try:
+    from chimerax.sideview.tool import SideViewCanvas, OrthoOverlay
+    if not hasattr(SideViewCanvas, "_mac_light_patched"):
+        _orig_sv_render = SideViewCanvas.render
+        def _mac_sv_render(self):
+            try:
+                if self.view is not None:
+                    self.view.set_background_color((0.961, 0.961, 0.969, 1.0))
+            except Exception:
+                pass
+            return _orig_sv_render(self)
+        SideViewCanvas.render = _mac_sv_render
+        SideViewCanvas._mac_light_patched = True
+    if not hasattr(OrthoOverlay, "_mac_light_patched"):
+        _orig_ortho_draw = OrthoOverlay.draw
+        def _mac_ortho_draw(self, renderer, draw_pass):
+            try:
+                from numpy import array, uint8
+                vc = self.vertex_colors
+                if vc is not None and len(vc) == 12:
+                    new_vc = array(vc, dtype=uint8, copy=True)
+                    for i in range(8):
+                        if new_vc[i][0] == 255 and new_vc[i][1] == 255 and new_vc[i][2] == 0:
+                            new_vc[i] = [0, 122, 255, 255]
+                    for i in range(8, 12):
+                        if new_vc[i][0] == 255 and new_vc[i][1] == 0 and new_vc[i][2] == 0:
+                            new_vc[i] = [224, 82, 99, 255]
+                    self.vertex_colors = new_vc
+            except Exception:
+                pass
+            return _orig_ortho_draw(self, renderer, draw_pass)
+        OrthoOverlay.draw = _mac_ortho_draw
+        OrthoOverlay._mac_light_patched = True
+except Exception:
+    pass
+
+try:
+    from chimerax.seq_view.seq_canvas import SeqCanvas
+    if not hasattr(SeqCanvas, "_mac_light_patched"):
+        _orig_seq_init = SeqCanvas.__init__
+        def _mac_seq_init(self, parent, sv, alignment):
+            try:
+                set_default_color_scheme("light")
+            except Exception:
+                pass
+            _orig_seq_init(self, parent, sv, alignment)
+            try:
+                bg = QtGui.QColor("#FFFFFF")
+                self.label_scene.setBackgroundBrush(bg)
+                self.main_scene.setBackgroundBrush(bg)
+                self._reformat()
+            except Exception:
+                pass
+        SeqCanvas.__init__ = _mac_seq_init
+        SeqCanvas._mac_light_patched = True
+except Exception:
+    pass
+
+def apply_light_to_sideview_and_sequences(session=None):
+    if not session or not hasattr(session, "tools"):
+        return
+    try:
+        set_default_color_scheme("light")
+    except Exception:
+        pass
+    for tool in session.tools.list():
+        try:
+            if hasattr(tool, "seq_canvas") and tool.seq_canvas:
+                sc = tool.seq_canvas
+                bg = QtGui.QColor("#FFFFFF")
+                if hasattr(sc, "label_scene"):
+                    sc.label_scene.setBackgroundBrush(bg)
+                if hasattr(sc, "main_scene"):
+                    sc.main_scene.setBackgroundBrush(bg)
+                if hasattr(sc, "_reformat"):
+                    sc._reformat()
+            if hasattr(tool, "opengl_canvas") and hasattr(tool, "view") and tool.view is not None:
+                tool.view.set_background_color((0.961, 0.961, 0.969, 1.0))
+                tool.opengl_canvas._redraw()
+        except Exception:
+            pass
+
 def apply_theme(session=None, mode="light"):
     app = QtWidgets.QApplication.instance()
     if not app:
         return
     app.setStyle("Fusion")
+    if not hasattr(app, "_mac_win_polish_filter"):
+        polish_filter = MacGlobalWindowPolishFilter(app)
+        app.installEventFilter(polish_filter)
+        app._mac_win_polish_filter = polish_filter
+    for top_w in app.topLevelWidgets():
+        if top_w.isVisible():
+            apply_win11_rounded_corners(top_w)
     font = QtGui.QFont("SF Pro Text", 11)
     if not font.exactMatch():
         font = QtGui.QFont("Helvetica Neue", 11)
@@ -1184,11 +1410,13 @@ def apply_theme(session=None, mode="light"):
     install_dock_traffic_lights(session)
     apply_mac_icons_to_all_tabs(session)
     apply_light_to_all_html_views(session)
+    apply_light_to_sideview_and_sequences(session)
     configure_3d_canvas(session)
 
     QtCore.QTimer.singleShot(150, lambda: apply_mac_icons_to_all_tabs(session))
     QtCore.QTimer.singleShot(200, lambda: install_dock_traffic_lights(session))
     QtCore.QTimer.singleShot(250, lambda: apply_light_to_all_html_views(session))
+    QtCore.QTimer.singleShot(300, lambda: apply_light_to_sideview_and_sequences(session))
 
     if not getattr(app, "_mac_tabs_hooked", False):
         for tw in app.findChildren(QtWidgets.QTabWidget):
@@ -1204,6 +1432,7 @@ def apply_theme(session=None, mode="light"):
             QtCore.QTimer.singleShot(120, lambda: apply_mac_icons_to_all_tabs(session))
             QtCore.QTimer.singleShot(160, lambda: install_dock_traffic_lights(session))
             QtCore.QTimer.singleShot(200, lambda: apply_light_to_all_html_views(session))
+            QtCore.QTimer.singleShot(240, lambda: apply_light_to_sideview_and_sequences(session))
         try:
             session.triggers.add_handler("end restore session", on_session_restored)
             session.triggers.add_handler("session open", on_session_restored)
