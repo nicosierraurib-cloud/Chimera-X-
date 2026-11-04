@@ -4,10 +4,10 @@ Modificación de interfaz (Qt/QSS) e iconografía vectorial para **UCSF ChimeraX
 
 ## Especificaciones
 
-* **UI / QSS:** Viewport en `#F5F5F7`, iluminación difusa (`lighting soft`) y contornos en `#3A3A3C` (`1.2px`). Paneles en `rgba(255, 255, 255, 0.96)`, bordes de `1px` (`rgba(0, 0, 0, 0.08)`), radio de `12px` y barra superior segmentada.
-* **Controles de Ventana:** Integrados en ventana principal y paneles acoplables (`Log`, `Model Panel`, `Sequence Viewer`): Cerrar (`#FF5F56`), Minimizar (`#FFBD2E`), Maximizar (`#27C93F`).
-* **Persistencia (`.cxs`):** Interceptores en `end restore session`, `session open` y `open models` para bloquear la reversión del fondo a negro.
-* **Iconografía:** +200 iconos (`128x128` PNG) compilados desde SVG mediante Python, mapeados a la estructura nativa de paquetes.
+* **UI / QSS:** Viewport 3D y `Side View` en `#F5F5F7`, iluminación difusa (`lighting soft`) y contornos en `#3A3A3C` (`1.2px`). Paneles y tarjetas en `#FFFFFF` con cabeceras en `#F0F3F9`, bordes suaves en `#D5DFEE` (`1px`), radio de `12px` (`16px` en barra de herramientas), separadores verticales en azul pastel (`#BACBE6`) y esquinas redondeadas nativas DWM en Windows 11.
+* **Controles de Ventana (`QPainter`):** Botones circulares vectoriales con antialiasing integrados en la ventana principal y paneles acoplables (`Log`, `Models`, `Side View`, `Sequence Viewer`): Cerrar (`#FF5F56`), Minimizar (`#FFBD2E`), Maximizar/Flotar (`#27C93F`).
+* **Modo Claro Integral y Persistencia (`.cxs`):** Visor HTML (`Log`), `Sequence Viewer`, `Side View` y diálogos secundarios sincronizados en tema claro, con interceptores en `end restore session`, `session open` y `open models` y recarga en vivo (`QFileSystemWatcher`).
+* **Iconografía:** +200 iconos únicos (`128x128` PNG y `.svg` vectoriales) diferenciados por función, con caché `O(1)` en memoria y mapeados a la estructura nativa de paquetes.
 
 ### Paleta Semántica
 * `#8EC5FC` — Cadenas principales, nitrógeno.
@@ -18,20 +18,32 @@ Modificación de interfaz (Qt/QSS) e iconografía vectorial para **UCSF ChimeraX
 * `#E2D1F9` — Superficies moleculares, neuroanatomía.
 * `#A0E7E5` — Puentes de hidrógeno, hidrofobicidad.
 
+## Instalación
+
+```bash
+python install.py
+```
+
+Dentro de la línea de comandos de ChimeraX puedes recargar o desactivar el tema en vivo:
+* `liquidglass` — Recarga el tema desde el disco.
+* `liquidglass off` — Restaura el aspecto por defecto.
+
 ## Estructura
 
 ```text
 Chimera-X-/
-├── theme/liquid_glass_theme.py         # Controlador QSS e interceptores de sesión
-├── hooks/chimerax_theme.pth            # Inyección automática en el arranque
+├── install.py                          # Instalador automático de 1 clic
+├── theme/liquid_glass_theme.py         # Controlador QSS, DWM e interceptores de sesión
+├── hooks/mac_sequoia_theme.pth         # Inyección automática en el arranque
 ├── icons/                              # Activos PNG (128x128)
-├── packages/                           # Árbol de módulos espejado de ChimeraX
+├── packages/                           # Árbol de iconos espejado de ChimeraX
 ├── svg/                                # Fuentes vectoriales (.svg)
 └── scripts/
+    ├── deduplicate_and_redesign.py     # Rediseño vectorial diferenciado por función
     ├── generate_all_vector_icons.py    # Compilador PNG (Pillow)
     └── generate_svgs.py                # Generador de trazados SVG
-
 ```
+
 ## Licencia
 
 Este proyecto se distribuye bajo la licencia MIT. Las marcas y nomenclaturas de UCSF ChimeraX pertenecen a sus respectivos titulares y a la Universidad de California, San Francisco (UCSF).
