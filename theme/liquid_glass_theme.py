@@ -948,6 +948,9 @@ QToolButton {
     font-size: 10px;
     font-weight: 500;
 }
+QToolButton[popupMode="1"] {
+    padding-right: 18px;
+}
 QToolButton:hover {
     background: #F0F4FB;
     border: 1px solid #D5E0F2;
@@ -961,6 +964,22 @@ QToolButton:checked {
     border: 1px solid #007AFF;
     color: #007AFF;
     font-weight: 600;
+}
+QToolButton::menu-button {
+    background-color: #FFFFFF;
+    border: 1px solid #D5DFEE;
+    border-radius: 6px;
+    width: 14px;
+    margin: 2px 1px;
+    subcontrol-origin: padding;
+    subcontrol-position: right;
+}
+QToolButton::menu-button:hover {
+    background-color: #F0F4FB;
+    border: 1px solid #BACBE6;
+}
+QToolButton::menu-button:pressed {
+    background-color: #E2EAF8;
 }
 QLabel {
     color: rgba(60, 60, 67, 0.52);
