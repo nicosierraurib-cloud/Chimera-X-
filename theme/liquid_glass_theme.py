@@ -107,7 +107,7 @@ _RAW_MAP = {
     ("Calculations", "Smooth"): "smooth.png",
     ("Rendering Modes", "XYZ slices"): "xyzslice.png",
     ("Rendering Modes", "Perpendicular slices"): "perpslice.png",
-    ("Rendering Modes", "Raycasting"): "raycasting.svg",
+    ("Rendering Modes", "Raycasting"): "raycasting.png",
     ("File", "Open DICOM"): "opendicom.png",
     ("Color", "Airways"): "airways.png",
     ("Color", "Chest CT"): "chest.png",
@@ -209,6 +209,57 @@ def resolve_mac_icon(title, description="", section="", tab=""):
 
     return None
 
+class MacTrafficLightButton(QtWidgets.QAbstractButton):
+    def __init__(self, fill_color, border_color, hover_color, glyph="", diameter=12, parent=None):
+        super().__init__(parent)
+        self._fill = QtGui.QColor(fill_color)
+        self._border = QtGui.QColor(border_color)
+        self._hover = QtGui.QColor(hover_color)
+        self._glyph = glyph
+        self._diameter = diameter
+        self.setFixedSize(diameter, diameter)
+        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_Hover, True)
+
+    def sizeHint(self):
+        return QtCore.QSize(self._diameter, self._diameter)
+
+    def enterEvent(self, event):
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        hovered = self.underMouse()
+        d = float(self._diameter)
+        rect = QtCore.QRectF(0.75, 0.75, d - 1.5, d - 1.5)
+        painter.setBrush(QtGui.QBrush(self._hover if hovered else self._fill))
+        pen = QtGui.QPen(self._border)
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        painter.drawEllipse(rect)
+        if hovered and self._glyph:
+            gpen = QtGui.QPen(QtGui.QColor(29, 29, 31, 195))
+            gpen.setWidthF(1.35)
+            gpen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+            painter.setPen(gpen)
+            c = d / 2.0
+            r = d * 0.21
+            if self._glyph == "close":
+                painter.drawLine(QtCore.QPointF(c - r, c - r), QtCore.QPointF(c + r, c + r))
+                painter.drawLine(QtCore.QPointF(c + r, c - r), QtCore.QPointF(c - r, c + r))
+            elif self._glyph == "min":
+                painter.drawLine(QtCore.QPointF(c - r * 1.15, c), QtCore.QPointF(c + r * 1.15, c))
+            elif self._glyph == "zoom":
+                painter.drawLine(QtCore.QPointF(c - r * 1.1, c), QtCore.QPointF(c + r * 1.1, c))
+                painter.drawLine(QtCore.QPointF(c, c - r * 1.1), QtCore.QPointF(c, c + r * 1.1))
+        painter.end()
+
 class MacWindowResizeFilter(QtCore.QObject):
     def __init__(self, window, margin=6):
         super().__init__(window)
@@ -271,30 +322,21 @@ class MacWindowHeader(QtWidgets.QWidget):
     def __init__(self, main_window):
         super().__init__(main_window)
         self.win = main_window
-        self.setFixedHeight(34)
-        self.setStyleSheet("background-color: #F5F5F7; border-bottom: 1px solid rgba(0, 0, 0, 0.08);")
+        self.setFixedHeight(32)
+        self.setStyleSheet("background-color: #F5F5F7; border: none;")
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(14, 0, 14, 0)
         layout.setSpacing(8)
 
-        btn_close = QtWidgets.QPushButton(self)
-        btn_close.setFixedSize(12, 12)
-        btn_close.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        btn_close.setStyleSheet("QPushButton { background-color: #FF5F56; border: 1px solid #E0443E; border-radius: 6px; } QPushButton:hover { background-color: #FF3B30; }")
+        btn_close = MacTrafficLightButton("#FF5F56", "#E0443E", "#FF3B30", "close", 12, self)
         btn_close.clicked.connect(self.win.close)
         layout.addWidget(btn_close)
 
-        btn_min = QtWidgets.QPushButton(self)
-        btn_min.setFixedSize(12, 12)
-        btn_min.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        btn_min.setStyleSheet("QPushButton { background-color: #FFBD2E; border: 1px solid #DEA123; border-radius: 6px; } QPushButton:hover { background-color: #FF9500; }")
+        btn_min = MacTrafficLightButton("#FFBD2E", "#DEA123", "#FF9500", "min", 12, self)
         btn_min.clicked.connect(self.win.showMinimized)
         layout.addWidget(btn_min)
 
-        btn_zoom = QtWidgets.QPushButton(self)
-        btn_zoom.setFixedSize(12, 12)
-        btn_zoom.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        btn_zoom.setStyleSheet("QPushButton { background-color: #27C93F; border: 1px solid #1AAB29; border-radius: 6px; } QPushButton:hover { background-color: #34C759; }")
+        btn_zoom = MacTrafficLightButton("#27C93F", "#1AAB29", "#34C759", "zoom", 12, self)
         def toggle_zoom():
             if self.win.isMaximized():
                 self.win.showNormal()
@@ -303,7 +345,7 @@ class MacWindowHeader(QtWidgets.QWidget):
         btn_zoom.clicked.connect(toggle_zoom)
         layout.addWidget(btn_zoom)
 
-        layout.addSpacing(16)
+        layout.addSpacing(14)
         self.title_lbl = QtWidgets.QLabel("ChimeraX", self)
         self.title_lbl.setStyleSheet("color: #1D1D1F; font-size: 13px; font-weight: 600; background: transparent; border: none;")
         layout.addWidget(self.title_lbl)
@@ -332,17 +374,11 @@ class MacDockTitleBar(QtWidgets.QWidget):
         layout.setContentsMargins(10, 2, 10, 2)
         layout.setSpacing(6)
 
-        btn_close = QtWidgets.QPushButton(self)
-        btn_close.setFixedSize(11, 11)
-        btn_close.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        btn_close.setStyleSheet("QPushButton { background-color: #FF5F56; border: 1px solid #E0443E; border-radius: 5.5px; } QPushButton:hover { background-color: #FF3B30; }")
+        btn_close = MacTrafficLightButton("#FF5F56", "#E0443E", "#FF3B30", "close", 12, self)
         btn_close.clicked.connect(self.dock.close)
         layout.addWidget(btn_close)
 
-        btn_min = QtWidgets.QPushButton(self)
-        btn_min.setFixedSize(11, 11)
-        btn_min.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        btn_min.setStyleSheet("QPushButton { background-color: #FFBD2E; border: 1px solid #DEA123; border-radius: 5.5px; } QPushButton:hover { background-color: #FF9500; }")
+        btn_min = MacTrafficLightButton("#FFBD2E", "#DEA123", "#FF9500", "min", 12, self)
         def toggle_min():
             w = self.dock.widget()
             if w:
@@ -350,10 +386,7 @@ class MacDockTitleBar(QtWidgets.QWidget):
         btn_min.clicked.connect(toggle_min)
         layout.addWidget(btn_min)
 
-        btn_zoom = QtWidgets.QPushButton(self)
-        btn_zoom.setFixedSize(11, 11)
-        btn_zoom.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        btn_zoom.setStyleSheet("QPushButton { background-color: #27C93F; border: 1px solid #1AAB29; border-radius: 5.5px; } QPushButton:hover { background-color: #34C759; }")
+        btn_zoom = MacTrafficLightButton("#27C93F", "#1AAB29", "#34C759", "zoom", 12, self)
         def toggle_float():
             self.dock.setFloating(not self.dock.isFloating())
         btn_zoom.clicked.connect(toggle_float)
@@ -365,6 +398,8 @@ class MacDockTitleBar(QtWidgets.QWidget):
         layout.addStretch()
         self.dock.windowTitleChanged.connect(self.label.setText)
 
+_HIDDEN_TITLE_DOCKS = frozenset(("Toolbar", "Command Line Interface", ""))
+
 def install_dock_traffic_lights(session=None):
     if not session or not hasattr(session, "ui") or not hasattr(session.ui, "main_window"):
         return
@@ -372,23 +407,37 @@ def install_dock_traffic_lights(session=None):
     if not win:
         return
     for dw in win.findChildren(QtWidgets.QDockWidget):
-        if not getattr(dw, "_mac_dock_styled", False):
+        title = dw.windowTitle().strip()
+        existing_tb = dw.titleBarWidget()
+        if title in _HIDDEN_TITLE_DOCKS:
+            if existing_tb is None or type(existing_tb).__name__ == "MacDockTitleBar":
+                empty = QtWidgets.QWidget(dw)
+                empty.setFixedHeight(0)
+                dw.setTitleBarWidget(empty)
+            continue
+        if existing_tb is not None and type(existing_tb).__name__ != "MacDockTitleBar" and existing_tb.height() == 0:
+            continue
+        if getattr(dw, "_mac_dock_ver", 0) != 2:
             title_bar = MacDockTitleBar(dw)
             dw.setTitleBarWidget(title_bar)
             dw._mac_dock_styled = True
+            dw._mac_dock_ver = 2
 
 try:
     from chimerax.ui.gui import _Qt
-    if not hasattr(_Qt, "_mac_dock_patched"):
-        _orig_qt_init = _Qt.__init__
+    if getattr(_Qt, "_mac_dock_ver", 0) != 2:
+        _orig_qt_init = getattr(_Qt, "_orig_mac_qt_init", _Qt.__init__)
+        _Qt._orig_mac_qt_init = _orig_qt_init
         def _mac_qt_init(self, tool_window, title, has_statusbar, hide_title_bar, main_window, close_destroys):
             _orig_qt_init(self, tool_window, title, has_statusbar, hide_title_bar, main_window, close_destroys)
-            if not hide_title_bar and hasattr(self, "dock_widget"):
+            if not hide_title_bar and hasattr(self, "dock_widget") and title not in _HIDDEN_TITLE_DOCKS:
                 title_bar = MacDockTitleBar(self.dock_widget)
                 self.dock_widget.setTitleBarWidget(title_bar)
                 self.dock_widget._mac_dock_styled = True
+                self.dock_widget._mac_dock_ver = 2
         _Qt.__init__ = _mac_qt_init
         _Qt._mac_dock_patched = True
+        _Qt._mac_dock_ver = 2
 except Exception:
     pass
 
@@ -396,13 +445,18 @@ def install_window_traffic_lights(session=None):
     if not session or not hasattr(session, "ui") or not hasattr(session.ui, "main_window"):
         return
     win = session.ui.main_window
-    if not win or getattr(win, "_mac_frameless_installed", False):
+    if not win:
+        return
+    if getattr(win, "_mac_frameless_ver", 0) == 2:
         return
     flags = win.windowFlags()
-    win.setWindowFlags(flags | QtCore.Qt.WindowType.FramelessWindowHint)
-    win.show()
-    header = MacWindowHeader(win)
+    if not (flags & QtCore.Qt.WindowType.FramelessWindowHint):
+        win.setWindowFlags(flags | QtCore.Qt.WindowType.FramelessWindowHint)
+        win.show()
     mb = win.menuBar()
+    if mb:
+        mb.setParent(None)
+    header = MacWindowHeader(win)
     top_container = QtWidgets.QWidget(win)
     top_container._is_mac_top = True
     vbox = QtWidgets.QVBoxLayout(top_container)
@@ -411,11 +465,14 @@ def install_window_traffic_lights(session=None):
     vbox.addWidget(header)
     if mb:
         vbox.addWidget(mb)
+        mb.show()
     win.setMenuWidget(top_container)
-    resize_filter = MacWindowResizeFilter(win)
-    win.installEventFilter(resize_filter)
-    win._mac_resize_filter = resize_filter
+    if not hasattr(win, "_mac_resize_filter"):
+        resize_filter = MacWindowResizeFilter(win)
+        win.installEventFilter(resize_filter)
+        win._mac_resize_filter = resize_filter
     win._mac_frameless_installed = True
+    win._mac_frameless_ver = 2
 
 def apply_mac_icons_to_all_tabs(session=None):
     from chimerax.toolbar.tool import get_toolbar_singleton
@@ -451,7 +508,7 @@ def apply_mac_icons_to_all_tabs(session=None):
 
 MACOS_LIGHT_PRO_QSS = """
 QWidget {
-    font-family: "SF Pro Text", "Helvetica Neue", "Helvetica", -apple-system, sans-serif;
+    font-family: "SF Pro Text", "Helvetica Neue", "Segoe UI", -apple-system, sans-serif;
     font-size: 12px;
     color: #1D1D1F;
     selection-background-color: rgba(0, 122, 255, 0.35);
@@ -461,10 +518,16 @@ QWidget {
 QMainWindow {
     background-color: #F5F5F7;
 }
+QMainWindow::separator, QSplitter::handle {
+    background-color: rgba(0, 0, 0, 0.06);
+    width: 1px;
+    height: 1px;
+    border: none;
+}
 QMenuBar {
     background: #F5F5F7;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-    padding: 3px 6px;
+    padding: 2px 8px 4px 8px;
     color: #1D1D1F;
 }
 QMenuBar::item {
@@ -501,7 +564,7 @@ QDockWidget {
     background-color: #FFFFFF;
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 10px;
-    margin: 3px;
+    margin: 2px;
 }
 QDockWidget::title {
     text-align: left;
@@ -557,7 +620,7 @@ QPushButton {
     background-color: rgba(0, 0, 0, 0.05);
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 6px;
-    padding: 4px 12px;
+    padding: 3px 8px;
     color: #1D1D1F;
     font-weight: 500;
     font-size: 11px;
@@ -600,6 +663,16 @@ QStatusBar {
     color: rgba(60, 60, 67, 0.7);
     font-size: 11px;
 }
+QStatusBar QToolButton {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 2px;
+}
+QStatusBar QToolButton:hover {
+    background: rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
 QScrollBar:vertical {
     width: 6px;
     background: transparent;
@@ -616,6 +689,22 @@ QScrollBar::handle:vertical:hover {
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0px;
 }
+QScrollBar:horizontal {
+    height: 6px;
+    background: transparent;
+    margin: 2px;
+}
+QScrollBar::handle:horizontal {
+    background: rgba(0, 0, 0, 0.2);
+    min-width: 24px;
+    border-radius: 3px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: rgba(0, 0, 0, 0.4);
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
 """
 
 TOOLBAR_LIGHT_PRO_QSS = """
@@ -624,7 +713,7 @@ QTabWidget {
     border: none;
 }
 QTabWidget::pane {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.96);
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 12px;
     margin: 2px 6px 4px 6px;
@@ -708,15 +797,62 @@ QLabel {
 }
 """
 
+_MACOS_LOG_CSS = """
+:root { color-scheme: light; }
+html, body {
+    background-color: #FFFFFF !important;
+    color: #1D1D1F !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", sans-serif !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+    margin: 6px 10px !important;
+}
+a {
+    color: #007AFF !important;
+    text-decoration: none !important;
+}
+a:hover {
+    text-decoration: underline !important;
+}
+pre, code, .cxcmd {
+    background-color: #F2F2F7 !important;
+    color: #1D1D1F !important;
+    border-left: 3px solid #BACBE6 !important;
+    border-radius: 5px !important;
+    padding: 4px 8px !important;
+    margin: 5px 0 !important;
+    font-family: "SF Mono", "Consolas", monospace !important;
+    font-size: 11px !important;
+}
+table {
+    border-collapse: collapse !important;
+    border: 1px solid #E5E5EA !important;
+    border-radius: 6px !important;
+    margin: 6px 0 !important;
+    font-size: 11px !important;
+}
+th, td {
+    border: 1px solid #E5E5EA !important;
+    padding: 4px 8px !important;
+}
+th {
+    background-color: #F5F5F7 !important;
+    color: #1D1D1F !important;
+    font-weight: 600 !important;
+}
+"""
+
 _LOG_LIGHT_SCRIPT = """
 (function() {
     var style = document.getElementById('_mac_light_style');
     if (!style) {
         style = document.createElement('style');
         style.id = '_mac_light_style';
-        document.head.appendChild(style);
+        if (document.head) document.head.appendChild(style);
     }
-    style.innerHTML = 'html, body { background-color: #FFFFFF !important; color: #1D1D1F !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif !important; } a { color: #007AFF !important; text-decoration: none; } pre, code, .cxcmd { background-color: #F2F2F7 !important; color: #1D1D1F !important; border-radius: 4px; padding: 2px 4px; font-family: "SF Mono", Menlo, Consolas, monospace !important; }';
+    if (style) {
+        style.innerHTML = 'html, body { background-color: #FFFFFF !important; color: #1D1D1F !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", sans-serif !important; font-size: 12px !important; } a { color: #007AFF !important; text-decoration: none !important; } pre, code, .cxcmd { background-color: #F2F2F7 !important; color: #1D1D1F !important; border-left: 3px solid #BACBE6 !important; border-radius: 5px !important; padding: 4px 8px !important; font-family: "SF Mono", Menlo, Consolas, monospace !important; } table { border-collapse: collapse !important; border: 1px solid #E5E5EA !important; } th, td { border: 1px solid #E5E5EA !important; padding: 4px 8px !important; } th { background-color: #F5F5F7 !important; }';
+    }
 })();
 """
 
@@ -748,6 +884,13 @@ def apply_light_to_all_html_views(session=None):
         if page:
             page.setBackgroundColor(QtGui.QColor(255, 255, 255))
             page.runJavaScript(_LOG_LIGHT_SCRIPT)
+    if hasattr(session, "logger") and hasattr(session.logger, "logs"):
+        for lg in session.logger.logs:
+            if hasattr(lg, "_actually_show"):
+                try:
+                    lg._actually_show()
+                except Exception:
+                    pass
 
 def configure_3d_canvas(session):
     if session:
@@ -768,7 +911,7 @@ def apply_theme(session=None, mode="light"):
     if not font.exactMatch():
         font = QtGui.QFont("Helvetica Neue", 11)
     if not font.exactMatch():
-        font = QtGui.QFont("Helvetica", 11)
+        font = QtGui.QFont("Segoe UI", 10)
     font.setStyleHint(QtGui.QFont.StyleHint.SansSerif)
     app.setFont(font)
 
@@ -793,7 +936,7 @@ def apply_theme(session=None, mode="light"):
         except Exception:
             pass
         ui.dark_mode = lambda: False
-        ui.dark_css = lambda: ""
+        ui.dark_css = lambda: _MACOS_LOG_CSS
         try:
             set_default_color_scheme("light")
         except Exception:
