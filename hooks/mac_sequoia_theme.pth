@@ -1,0 +1,1 @@
+import sys, os; _p = r"C:\Users\Parfion\chimerax_start"; _p not in sys.path and sys.path.insert(0, _p); import liquid_glass_theme
