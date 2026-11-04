@@ -1,11 +1,18 @@
 import os
 import sys
 import gc
+import math
+import time
 import ctypes
 from functools import lru_cache
 from Qt import QtWidgets, QtGui, QtCore
 from chimerax.core.commands import register, CmdDesc, StringArg, run
 from chimerax.core.colors import set_default_color_scheme
+try:
+    from chimerax.core import buildinfo as _cx_buildinfo
+    _CX_VERSION = getattr(_cx_buildinfo, "version", "1.12")
+except Exception:
+    _CX_VERSION = "1.12"
 try:
     gc.set_threshold(50000, 20, 20)
 except Exception:
@@ -451,6 +458,351 @@ class MacWindowResizeFilter(QtCore.QObject):
             self.win.setCursor(QtCore.Qt.CursorShape.SizeHorCursor)
         elif is_t or is_b:
             self.win.setCursor(QtCore.Qt.CursorShape.SizeVerCursor)
+class MacLoadingOverlay(QtWidgets.QWidget):
+    def __init__(self):
+        super().__init__(None, QtCore.Qt.WindowType.Tool | QtCore.Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self._session = None
+        self._kind = "startup"
+        self._label = ""
+        self._progress = 0.08
+        self._anim_phase = 0.0
+        self._opacity = 1.0
+        self._fading_out = False
+        self._start_t = time.perf_counter()
+        self._last_t = self._start_t
+        self._dt_samples = []
+        self._stable_count = 0
+        self._target_fps = 60
+        self._measured_fps = 60
+        self._min_duration = 0.85
+        self._max_duration = 1.65
+        self._timer = QtCore.QTimer(self)
+        self._timer.setInterval(15)
+        self._timer.timeout.connect(self._on_tick)
+    def start_loading(self, session=None, kind="startup", label=""):
+        self._session = session
+        self._kind = kind
+        self._label = label
+        self._progress = 0.08
+        self._fading_out = False
+        self._opacity = 1.0
+        self.setWindowOpacity(1.0)
+        self._start_t = time.perf_counter()
+        self._last_t = self._start_t
+        self._dt_samples = []
+        self._stable_count = 0
+        scr = QtGui.QGuiApplication.primaryScreen()
+        hz = scr.refreshRate() if scr else 60.0
+        self._target_fps = 60 if hz >= 50.0 else 30
+        self._measured_fps = self._target_fps
+        if kind == "startup":
+            self._min_duration = 1.05
+            self._max_duration = 1.90
+        elif kind == "theme":
+            self._min_duration = 0.65
+            self._max_duration = 1.25
+        else:
+            self._min_duration = 0.48
+            self._max_duration = 0.95
+        self._sync_geometry()
+        self.show()
+        self.raise_()
+        if not self._timer.isActive():
+            self._timer.start()
+        self.update()
+    def _sync_geometry(self):
+        win = None
+        if self._session and hasattr(self._session, "ui") and hasattr(self._session.ui, "main_window"):
+            win = self._session.ui.main_window
+        if win and win.isVisible():
+            geo = win.geometry()
+            if self.geometry() != geo:
+                self.setGeometry(geo)
+        else:
+            scr = QtGui.QGuiApplication.primaryScreen()
+            if scr:
+                ag = scr.availableGeometry()
+                w, h = 1080, 720
+                x = ag.x() + (ag.width() - w) // 2
+                y = ag.y() + (ag.height() - h) // 2
+                self.setGeometry(x, y, w, h)
+    def _on_tick(self):
+        app = QtWidgets.QApplication.instance()
+        if app and (app.activeModalWidget() or app.activePopupWidget()):
+            self._timer.stop()
+            self.hide()
+            return
+        now = time.perf_counter()
+        dt = max(0.001, now - self._last_t)
+        self._last_t = now
+        elapsed = now - self._start_t
+        self._anim_phase += dt * 3.8
+        self._dt_samples.append(dt)
+        if len(self._dt_samples) > 10:
+            self._dt_samples.pop(0)
+        avg_dt = sum(self._dt_samples) / len(self._dt_samples)
+        raw_fps = int(round(1.0 / max(0.004, avg_dt)))
+        self._measured_fps = min(self._target_fps, max(12, raw_fps))
+        threshold_fps = 46 if self._target_fps >= 60 else 25
+        if self._measured_fps >= threshold_fps:
+            self._stable_count += 1
+        else:
+            self._stable_count = max(0, self._stable_count - 1)
+        if self._session and hasattr(self._session, "main_view") and self._session.main_view:
+            try:
+                self._session.main_view.check_for_drawing_change()
+            except Exception:
+                pass
+        self._sync_geometry()
+        if self._fading_out:
+            self._opacity -= dt * 4.8
+            if self._opacity <= 0.02:
+                self._timer.stop()
+                self.hide()
+                return
+            self.setWindowOpacity(max(0.0, self._opacity))
+            self.update()
+            return
+        base_prog = min(0.88, (elapsed / max(0.25, self._min_duration)) * 0.85)
+        if elapsed >= self._min_duration and (self._stable_count >= 4 or elapsed >= self._max_duration):
+            self._progress = min(1.0, self._progress + dt * 3.2)
+            if self._progress >= 0.995:
+                self._progress = 1.0
+                self._fading_out = True
+        else:
+            if base_prog > self._progress:
+                self._progress = base_prog
+            else:
+                self._progress = min(0.92, self._progress + dt * 0.25)
+        self.update()
+    def _get_messages(self):
+        p = self._progress
+        fps = self._measured_fps
+        tgt = self._target_fps
+        if self._kind == "theme":
+            if p < 0.32:
+                left = "Aplicando paleta visual..."
+                right = f"v{_CX_VERSION} \u2022 Iniciando recursos..."
+            elif p < 0.66:
+                left = "Sincronizando paneles y visor 3D..."
+                right = f"v{_CX_VERSION} \u2022 Compilando shaders..."
+            elif p < 0.94:
+                left = f"Estabilizando fotogramas ({fps} / {tgt} FPS)..."
+                right = f"v{_CX_VERSION} \u2022 Sincronizando {tgt} Hz..."
+            else:
+                left = f"Interfaz lista ({tgt} FPS)"
+                right = f"v{_CX_VERSION} \u2022 {tgt} FPS estables"
+        elif self._kind == "action":
+            act = self._label if self._label else "herramienta"
+            if p < 0.35:
+                left = f"Ejecutando: {act}..."
+                right = f"v{_CX_VERSION} \u2022 Procesando..."
+            elif p < 0.68:
+                left = "Actualizando geometr\u00eda molecular..."
+                right = f"v{_CX_VERSION} \u2022 Renderizando vista..."
+            elif p < 0.94:
+                left = f"Estabilizando fotogramas ({fps} / {tgt} FPS)..."
+                right = f"v{_CX_VERSION} \u2022 Sincronizando {tgt} Hz..."
+            else:
+                left = f"Vista estabilizada ({tgt} FPS)"
+                right = f"v{_CX_VERSION} \u2022 {tgt} FPS estables"
+        else:
+            if p < 0.28:
+                left = "Cargando m\u00f3dulos..."
+                right = f"v{_CX_VERSION} \u2022 Iniciando recursos..."
+            elif p < 0.56:
+                left = "Inicializando motor OpenGL 3D..."
+                right = f"v{_CX_VERSION} \u2022 Cargando paquetes..."
+            elif p < 0.88:
+                left = f"Estabilizando fotogramas ({fps} / {tgt} FPS)..."
+                right = f"v{_CX_VERSION} \u2022 Sincronizando {tgt} Hz..."
+            else:
+                left = f"Entorno listo ({tgt} FPS)"
+                right = f"v{_CX_VERSION} \u2022 {tgt} FPS estables"
+        return left, right
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
+        w = float(self.width())
+        h = float(self.height())
+        is_dark = get_current_mode() == "dark"
+        bg_outer = QtGui.QColor(23, 24, 27, 244) if is_dark else QtGui.QColor(228, 234, 242, 244)
+        outer_path = QtGui.QPainterPath()
+        outer_path.addRoundedRect(QtCore.QRectF(0.0, 0.0, w, h), 11.0, 11.0)
+        painter.fillPath(outer_path, bg_outer)
+        cw = min(680.0, max(500.0, w * 0.58))
+        ch = min(460.0, max(340.0, h * 0.62))
+        cx = w * 0.5
+        cy = h * 0.5
+        card_rect = QtCore.QRectF(cx - cw * 0.5, cy - ch * 0.5, cw, ch)
+        for i in range(6, 0, -1):
+            sp = float(i) * 2.5
+            s_alpha = int((26 if is_dark else 10) * (7 - i) / 6.0)
+            s_path = QtGui.QPainterPath()
+            s_path.addRoundedRect(card_rect.adjusted(-sp, -sp + 3.0, sp, sp + 5.0), 14.0 + sp * 0.4, 14.0 + sp * 0.4)
+            painter.fillPath(s_path, QtGui.QColor(0, 0, 0, s_alpha))
+        card_path = QtGui.QPainterPath()
+        card_path.addRoundedRect(card_rect, 13.0, 13.0)
+        card_fill = QtGui.QColor("#1F2024") if is_dark else QtGui.QColor("#F4F5F8")
+        card_border = QtGui.QColor("#383A42") if is_dark else QtGui.QColor("#D4DBE6")
+        painter.fillPath(card_path, card_fill)
+        cpen = QtGui.QPen(card_border)
+        cpen.setWidthF(1.2)
+        painter.setPen(cpen)
+        painter.drawPath(card_path)
+        bob = math.sin(self._anim_phase) * 2.2
+        em_cx = card_rect.left() + cw * 0.295
+        em_cy = card_rect.top() + ch * 0.45 + bob
+        rad = min(cw, ch) * 0.195
+        ring_shadow_pen = QtGui.QPen(QtGui.QColor(0, 0, 0, 55 if is_dark else 28))
+        ring_shadow_pen.setWidthF(rad * 0.145)
+        painter.setPen(ring_shadow_pen)
+        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy + 3.5), rad, rad)
+        ring_pen = QtGui.QPen(QtGui.QColor("#8EBDF8"))
+        ring_pen.setWidthF(rad * 0.145)
+        ring_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        painter.setPen(ring_pen)
+        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad, rad)
+        glow_pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 135 if is_dark else 165))
+        glow_pen.setWidthF(rad * 0.08)
+        glow_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        painter.setPen(glow_pen)
+        angle_deg = int((self._anim_phase * 75.0) % 360.0) * 16
+        painter.drawArc(
+            QtCore.QRectF(em_cx - rad, em_cy - rad, rad * 2.0, rad * 2.0),
+            angle_deg,
+            52 * 16,
+        )
+        painter.save()
+        painter.translate(em_cx, em_cy)
+        swoop = QtGui.QPainterPath()
+        swoop.moveTo(rad * 0.68, rad * 0.30)
+        swoop.cubicTo(
+            rad * 0.05, -rad * 0.25,
+            -rad * 0.85, -rad * 0.32,
+            -rad * 0.66, rad * 0.08,
+        )
+        swoop.cubicTo(
+            -rad * 0.45, rad * 0.48,
+            rad * 0.25, rad * 0.85,
+            rad * 0.78, rad * 1.06,
+        )
+        swoop.cubicTo(
+            rad * 0.58, rad * 0.86,
+            -rad * 0.22, rad * 0.36,
+            -rad * 0.38, rad * 0.02,
+        )
+        swoop.cubicTo(
+            -rad * 0.50, -rad * 0.18,
+            rad * 0.08, -rad * 0.08,
+            rad * 0.62, rad * 0.38,
+        )
+        swoop.closeSubpath()
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.fillPath(swoop, QtGui.QColor("#5C626E") if is_dark else QtGui.QColor("#3E434C"))
+        if is_dark:
+            hi_swoop = QtGui.QPainterPath()
+            hi_swoop.moveTo(rad * 0.58, rad * 0.34)
+            hi_swoop.cubicTo(
+                rad * 0.02, -rad * 0.14,
+                -rad * 0.55, -rad * 0.18,
+                -rad * 0.42, rad * 0.08,
+            )
+            hi_swoop.cubicTo(
+                -rad * 0.26, rad * 0.38,
+                rad * 0.22, rad * 0.72,
+                rad * 0.56, rad * 0.88,
+            )
+            hi_pen = QtGui.QPen(QtGui.QColor("#E4E8F0"))
+            hi_pen.setWidthF(rad * 0.075)
+            hi_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+            painter.setPen(hi_pen)
+            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+            painter.drawPath(hi_swoop)
+        node_pt = QtCore.QPointF(-rad * 0.02, -rad * 0.04)
+        node_r = rad * 0.115 * (1.0 + 0.08 * math.sin(self._anim_phase * 2.0))
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(QtGui.QColor("#808794") if is_dark else QtGui.QColor("#3E434C"))
+        painter.drawEllipse(node_pt, node_r, node_r)
+        painter.restore()
+        x_font = QtGui.QFont("Times New Roman", int(rad * 1.05))
+        x_font.setBold(True)
+        x_font.setItalic(True)
+        painter.setFont(x_font)
+        x_rect = QtCore.QRectF(em_cx - rad * 0.10, em_cy - rad * 1.18, rad * 1.35, rad * 1.25)
+        painter.setPen(QtGui.QColor(0, 0, 0, 70 if is_dark else 42))
+        painter.drawText(x_rect.translated(2.0, 3.5), QtCore.Qt.AlignmentFlag.AlignCenter, "X")
+        painter.setPen(QtGui.QColor("#FF5E57"))
+        painter.drawText(x_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "X")
+        tx = card_rect.left() + cw * 0.48
+        ty = card_rect.top() + ch * 0.44
+        uc_font = QtGui.QFont("Segoe UI", int(rad * 0.24))
+        uc_font.setWeight(QtGui.QFont.Weight.Black)
+        painter.setFont(uc_font)
+        uc_col = QtGui.QColor("#AEB4C0") if is_dark else QtGui.QColor("#222428")
+        painter.setPen(uc_col)
+        fm_uc = QtGui.QFontMetricsF(uc_font)
+        painter.drawText(QtCore.QPointF(tx, ty - rad * 0.24), "UC")
+        uc_w = fm_uc.horizontalAdvance("UC")
+        painter.drawText(QtCore.QPointF(tx + uc_w - 1.0, ty - rad * 0.14), "SF")
+        cx_font = QtGui.QFont("Segoe UI", int(rad * 0.43))
+        cx_font.setWeight(QtGui.QFont.Weight.Bold)
+        painter.setFont(cx_font)
+        painter.setPen(QtGui.QColor("#F2F4F8") if is_dark else QtGui.QColor("#222428"))
+        painter.drawText(QtCore.QPointF(tx, ty + rad * 0.34), "Chimera X")
+        bar_margin = 44.0
+        bar_x = card_rect.left() + bar_margin
+        bar_w = cw - bar_margin * 2.0
+        bar_y = card_rect.bottom() - 54.0
+        bar_h = 7.0
+        track_path = QtGui.QPainterPath()
+        track_path.addRoundedRect(QtCore.QRectF(bar_x, bar_y, bar_w, bar_h), 3.5, 3.5)
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.fillPath(track_path, QtGui.QColor("#32343A") if is_dark else QtGui.QColor("#DCDFE5"))
+        fill_w = max(12.0, bar_w * float(self._progress))
+        fill_rect = QtCore.QRectF(bar_x, bar_y, fill_w, bar_h)
+        fill_path = QtGui.QPainterPath()
+        fill_path.addRoundedRect(fill_rect, 3.5, 3.5)
+        grad = QtGui.QLinearGradient(bar_x, bar_y, bar_x + fill_w, bar_y)
+        grad.setColorAt(0.0, QtGui.QColor("#8EC5FC"))
+        grad.setColorAt(0.5, QtGui.QColor("#A0E7E5"))
+        grad.setColorAt(1.0, QtGui.QColor("#B5EAD7"))
+        painter.fillPath(fill_path, QtGui.QBrush(grad))
+        shimmer_pos = (self._anim_phase * 0.45) % 1.0
+        sx = bar_x + shimmer_pos * fill_w
+        s_grad = QtGui.QLinearGradient(sx - 35.0, bar_y, sx + 35.0, bar_y)
+        s_grad.setColorAt(0.0, QtGui.QColor(255, 255, 255, 0))
+        s_grad.setColorAt(0.5, QtGui.QColor(255, 255, 255, 130))
+        s_grad.setColorAt(1.0, QtGui.QColor(255, 255, 255, 0))
+        painter.fillPath(fill_path, QtGui.QBrush(s_grad))
+        left_msg, right_msg = self._get_messages()
+        msg_font = QtGui.QFont("Segoe UI", 10)
+        msg_font.setWeight(QtGui.QFont.Weight.Medium)
+        painter.setFont(msg_font)
+        painter.setPen(QtGui.QColor("#8E94A0") if is_dark else QtGui.QColor("#3A3D45"))
+        text_rect = QtCore.QRectF(bar_x, bar_y + 13.0, bar_w, 22.0)
+        painter.drawText(text_rect, QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter, left_msg)
+        painter.drawText(text_rect, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter, right_msg)
+        painter.end()
+def show_mac_loading(session=None, kind="startup", label=""):
+    app = QtWidgets.QApplication.instance()
+    if not app:
+        return
+    ov = getattr(app, "_mac_loading_overlay", None)
+    if ov is None or type(ov).__name__ != "MacLoadingOverlay":
+        if ov is not None:
+            try:
+                ov.hide()
+                ov.deleteLater()
+            except Exception:
+                pass
+        ov = MacLoadingOverlay()
+        app._mac_loading_overlay = ov
+    ov.start_loading(session=session, kind=kind, label=label)
 class MacWindowHeader(QtWidgets.QWidget):
     def __init__(self, main_window, session_getter=None):
         super().__init__(main_window)
@@ -484,7 +836,12 @@ class MacWindowHeader(QtWidgets.QWidget):
             mb = QtWidgets.QPushButton(label_text, self)
             mb.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             mb.setFixedHeight(20)
-            mb.clicked.connect(lambda checked=False, m=mode_key: apply_theme(self._session_getter() if self._session_getter else None, mode=m))
+            def _on_mode_click(checked=False, m=mode_key, lt=label_text):
+                ses = self._session_getter() if self._session_getter else None
+                set_current_mode(m)
+                show_mac_loading(ses, kind="theme", label=lt)
+                apply_theme(ses, mode=m)
+            mb.clicked.connect(_on_mode_click)
             layout.addWidget(mb)
             self._mode_btns[mode_key] = mb
         self.refresh_theme()
@@ -1308,12 +1665,23 @@ def apply_mac_icons_to_all_tabs(session=None):
                 except Exception:
                     pass
     icon_sz = QtCore.QSize(28, 28)
+    _skip_dlg_titles = frozenset(("open", "save", "recent", "open dicom", "snapshot", "spin movie"))
     for b in ttb.findChildren(QtWidgets.QToolButton):
         if not getattr(b, "_mac_btn_sized", False):
             b.setIconSize(icon_sz)
             if b.popupMode() == QtWidgets.QToolButton.ToolButtonPopupMode.MenuButtonPopup:
                 b.setMinimumWidth(max(b.minimumWidth(), 64))
             b._mac_btn_sized = True
+        if not getattr(b, "_mac_load_hooked", False):
+            def _on_tb_btn_clicked(checked=False, btn=b):
+                txt = btn.text().replace("\n", " ").strip()
+                if txt.lower() not in _skip_dlg_titles:
+                    show_mac_loading(session, kind="action", label=txt)
+            try:
+                b.clicked.connect(_on_tb_btn_clicked)
+                b._mac_load_hooked = True
+            except Exception:
+                pass
 try:
     from chimerax.ui.widgets.tabbedtoolbar import _Section
     if not hasattr(_Section, "_mac_update_btn_patched"):
@@ -1658,6 +2026,7 @@ def apply_theme(session=None, mode=None):
         app._mac_tabs_hooked = True
     if session and hasattr(session, "triggers") and not getattr(session, "_mac_triggers_added", False):
         def on_session_restored(*args):
+            show_mac_loading(session, kind="action", label="Modelo 3D")
             QtCore.QTimer.singleShot(80, lambda: configure_3d_canvas(session))
             QtCore.QTimer.singleShot(100, lambda: install_viewport_rounded_frame(session))
             QtCore.QTimer.singleShot(120, lambda: apply_mac_icons_to_all_tabs(session))
@@ -1689,7 +2058,10 @@ try:
         def _mac_session_init(self, *args, **kwargs):
             _orig_session_init(self, *args, **kwargs)
             try:
-                QtCore.QTimer.singleShot(150, lambda: apply_theme(self, mode=_CURRENT_MODE))
+                def _start_with_splash():
+                    show_mac_loading(self, kind="startup")
+                    apply_theme(self, mode=_CURRENT_MODE)
+                QtCore.QTimer.singleShot(80, _start_with_splash)
             except Exception:
                 pass
         Session.__init__ = _mac_session_init
@@ -1712,6 +2084,7 @@ def reload_theme_from_disk(session=None, mode=None):
     global _CURRENT_MODE
     if mode is not None:
         set_current_mode(mode)
+    show_mac_loading(session, kind="theme")
     theme_file = r"C:\Users\Parfion\chimerax_start\liquid_glass_theme.py"
     if os.path.exists(theme_file):
         try:
