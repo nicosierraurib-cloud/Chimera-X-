@@ -1,26 +1,49 @@
 import os
+import sys
 from Qt import QtWidgets, QtGui, QtCore
 from chimerax.core.commands import register, CmdDesc, StringArg, run
+from chimerax.core.colors import set_default_color_scheme
 
 ICONS_DIR = r"C:\Users\Parfion\Downloads\chimerax_mac_icons"
+_EXISTING_ICONS = frozenset(os.listdir(ICONS_DIR)) if os.path.exists(ICONS_DIR) else frozenset()
+_QICON_CACHE = {}
+
+def get_cached_qicon(file_path):
+    icon = _QICON_CACHE.get(file_path)
+    if icon is None and file_path and os.path.exists(file_path):
+        icon = QtGui.QIcon(file_path)
+        _QICON_CACHE[file_path] = icon
+    return icon
+
+try:
+    import chimerax.shortcuts
+    if not hasattr(chimerax.shortcuts, "bundle_api"):
+        import importlib.util
+        orig_p = r"C:\Program Files\ChimeraX 1.12\bin\Lib\site-packages\chimerax\shortcuts\__init__.py"
+        if os.path.exists(orig_p):
+            spec = importlib.util.spec_from_file_location("chimerax.shortcuts", orig_p)
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["chimerax.shortcuts"] = mod
+            spec.loader.exec_module(mod)
+except Exception:
+    pass
 
 try:
     from chimerax.core.toolshed.info import BundleInfo
     if not hasattr(BundleInfo, "_mac_patched"):
         _orig_get_path = BundleInfo.get_path
         def _mac_get_path(self, subpath):
-            if subpath and (subpath.endswith(".png") or subpath.endswith(".svg") or "icons" in subpath):
+            if subpath:
                 fname = os.path.basename(subpath)
-                mac_p = os.path.join(ICONS_DIR, fname)
-                if os.path.exists(mac_p):
-                    return mac_p
+                if fname in _EXISTING_ICONS:
+                    return os.path.join(ICONS_DIR, fname)
             return _orig_get_path(self, subpath)
         BundleInfo.get_path = _mac_get_path
         BundleInfo._mac_patched = True
 except Exception:
     pass
 
-EXACT_SECTION_TITLE_MAP = {
+_RAW_MAP = {
     ("File", "Open"): "open-in-app.png",
     ("File", "Recent"): "recentfiles.png",
     ("File", "Save"): "content-save.png",
@@ -155,42 +178,48 @@ EXACT_SECTION_TITLE_MAP = {
     ("Other", "Next docked"): "nextdocking.png",
 }
 
+_FAST_SECTION_TITLE_MAP = {}
+_FAST_TITLE_MAP = {}
+for (sec, title), fname in _RAW_MAP.items():
+    if fname in _EXISTING_ICONS:
+        p = os.path.join(ICONS_DIR, fname)
+        _FAST_SECTION_TITLE_MAP[(sec.lower().strip(), title.lower().strip())] = p
+        _FAST_TITLE_MAP[title.lower().strip()] = p
+
+_SPECIAL_MAP = {
+    ("markers", "move"): "mark_move.png",
+    ("", "drag model"): "drag_model.png",
+    ("", "move model"): "move_picked_model.png",
+    ("", "inspect"): "magnifying-glass.png",
+    ("", "zoom"): "zoom.png",
+}
+for (tb, t), fn in _SPECIAL_MAP.items():
+    if fn in _EXISTING_ICONS:
+        p = os.path.join(ICONS_DIR, fn)
+        _FAST_SECTION_TITLE_MAP[(tb, t)] = p
+        if not tb:
+            _FAST_TITLE_MAP[t] = p
+
 def resolve_mac_icon(title, description="", section="", tab=""):
-    key = (section, title)
-    if key in EXACT_SECTION_TITLE_MAP:
-        fname = EXACT_SECTION_TITLE_MAP[key]
-        fp = os.path.join(ICONS_DIR, fname)
-        if os.path.exists(fp):
-            return fp
-    norm_title = title.lower().strip()
-    if tab == "Markers" and norm_title == "move":
-        p = os.path.join(ICONS_DIR, "mark_move.png")
-        if os.path.exists(p):
-            return p
-    if norm_title == "drag model":
-        p = os.path.join(ICONS_DIR, "drag_model.png")
-        if os.path.exists(p):
-            return p
-    if norm_title == "move model":
-        p = os.path.join(ICONS_DIR, "move_picked_model.png")
-        if os.path.exists(p):
-            return p
-    if norm_title == "inspect":
-        p = os.path.join(ICONS_DIR, "magnifying-glass.png")
-        if os.path.exists(p):
-            return p
-    if norm_title == "zoom":
-        p = os.path.join(ICONS_DIR, "zoom.png")
-        if os.path.exists(p):
-            return p
-    for (sec, t), fname in EXACT_SECTION_TITLE_MAP.items():
-        if t.lower().strip() == norm_title:
-            fp = os.path.join(ICONS_DIR, fname)
-            if os.path.exists(fp):
-                return fp
-    direct = os.path.join(ICONS_DIR, f"{norm_title}.png")
-    if os.path.exists(direct):
-        return direct
+    t_key = title.lower().strip()
+    sec_key = section.lower().strip()
+    tab_key = tab.lower().strip()
+
+    if tab_key == "markers" and t_key == "move":
+        return _FAST_SECTION_TITLE_MAP.get(("markers", "move"))
+
+    res = _FAST_SECTION_TITLE_MAP.get((sec_key, t_key))
+    if res:
+        return res
+
+    res = _FAST_TITLE_MAP.get(t_key)
+    if res:
+        return res
+
+    direct_name = f"{t_key}.png"
+    if direct_name in _EXISTING_ICONS:
+        return os.path.join(ICONS_DIR, direct_name)
+
     return None
 
 class MacWindowResizeFilter(QtCore.QObject):
@@ -202,11 +231,12 @@ class MacWindowResizeFilter(QtCore.QObject):
     def eventFilter(self, obj, event):
         if obj is not self.win:
             return False
-        if event.type() == QtCore.QEvent.Type.MouseMove:
+        ev_type = event.type()
+        if ev_type == QtCore.QEvent.Type.MouseMove:
             if not self.win.isMaximized():
                 edge = self._get_edge(event.pos())
                 self._update_cursor(edge)
-        elif event.type() == QtCore.QEvent.Type.MouseButtonPress:
+        elif ev_type == QtCore.QEvent.Type.MouseButtonPress:
             if event.button() == QtCore.Qt.MouseButton.LeftButton and not self.win.isMaximized():
                 edge = self._get_edge(event.pos())
                 if edge:
@@ -221,13 +251,15 @@ class MacWindowResizeFilter(QtCore.QObject):
         h = self.win.height()
         m = self.margin
         edges = 0
-        if pos.x() <= m:
+        px = pos.x()
+        py = pos.y()
+        if px <= m:
             edges |= QtCore.Qt.Edge.LeftEdge.value
-        elif pos.x() >= w - m:
+        elif px >= w - m:
             edges |= QtCore.Qt.Edge.RightEdge.value
-        if pos.y() <= m:
+        if py <= m:
             edges |= QtCore.Qt.Edge.TopEdge.value
-        elif pos.y() >= h - m:
+        elif py >= h - m:
             edges |= QtCore.Qt.Edge.BottomEdge.value
         return QtCore.Qt.Edge(edges) if edges else None
 
@@ -312,12 +344,14 @@ class MacDockTitleBar(QtWidgets.QWidget):
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(10, 2, 10, 2)
         layout.setSpacing(6)
+
         btn_close = QtWidgets.QPushButton(self)
         btn_close.setFixedSize(11, 11)
         btn_close.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         btn_close.setStyleSheet("QPushButton { background-color: #FF5F56; border: 1px solid #E0443E; border-radius: 5.5px; } QPushButton:hover { background-color: #FF3B30; }")
         btn_close.clicked.connect(self.dock.close)
         layout.addWidget(btn_close)
+
         btn_min = QtWidgets.QPushButton(self)
         btn_min.setFixedSize(11, 11)
         btn_min.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
@@ -328,6 +362,7 @@ class MacDockTitleBar(QtWidgets.QWidget):
                 w.setVisible(not w.isVisible())
         btn_min.clicked.connect(toggle_min)
         layout.addWidget(btn_min)
+
         btn_zoom = QtWidgets.QPushButton(self)
         btn_zoom.setFixedSize(11, 11)
         btn_zoom.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
@@ -336,6 +371,7 @@ class MacDockTitleBar(QtWidgets.QWidget):
             self.dock.setFloating(not self.dock.isFloating())
         btn_zoom.clicked.connect(toggle_float)
         layout.addWidget(btn_zoom)
+
         self.label = QtWidgets.QLabel(self.dock.windowTitle(), self)
         self.label.setStyleSheet("color: #1D1D1F; font-size: 11px; font-weight: 600; padding-left: 6px; background: transparent; border: none;")
         layout.addWidget(self.label)
@@ -401,27 +437,30 @@ def apply_mac_icons_to_all_tabs(session=None):
         return
     ttb = tb_tool.ttb
     ttb.setStyleSheet(TOOLBAR_LIGHT_PRO_QSS)
-    for tab_name, sections in list(getattr(ttb, "_buttons", {}).items()):
+
+    for tab_name, sections in getattr(ttb, "_buttons", {}).items():
         if not isinstance(sections, dict):
             continue
-        for sec_name, section in list(sections.items()):
+        for sec_name, section in sections.items():
             if sec_name == "__toolbar__":
                 continue
             modified = False
             for bi in getattr(section, "_buttons", []):
                 icon_path = resolve_mac_icon(bi.title, getattr(bi, "description", ""), sec_name, tab_name)
-                if icon_path and os.path.exists(icon_path):
-                    bi.icon = QtGui.QIcon(icon_path)
-                    bi.highlight_icon = None
-                    modified = True
+                if icon_path:
+                    cached_icon = get_cached_qicon(icon_path)
+                    if cached_icon:
+                        bi.icon = cached_icon
+                        bi.highlight_icon = None
+                        modified = True
             if modified and hasattr(section, "_redo_layout"):
                 try:
                     section._redo_layout()
                 except Exception:
                     pass
+
     for b in ttb.findChildren(QtWidgets.QToolButton):
         b.setIconSize(QtCore.QSize(28, 28))
-        b.update()
 
 MACOS_LIGHT_PRO_QSS = """
 QWidget {
@@ -492,23 +531,38 @@ QDockWidget::close-button, QDockWidget::float-button {
     border: none;
     background: transparent;
 }
-QTreeView, QListView, QTableView {
+QTreeView, QListView, QTableView, QTreeWidget, QTableWidget {
     background-color: #FFFFFF;
     border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 4px;
     color: #1D1D1F;
-    alternate-background-color: rgba(0, 0, 0, 0.02);
+    alternate-background-color: #FBFBFC;
 }
-QTreeView::item, QListView::item {
+QHeaderView::section {
+    background-color: #F5F5F7;
+    color: #1D1D1F;
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 5px 8px;
+    font-weight: 600;
+    font-size: 11px;
+}
+QHeaderView {
+    background-color: #F5F5F7;
+    border: none;
+}
+QTreeView::item, QListView::item, QTreeWidget::item {
     padding: 4px 6px;
     border-radius: 6px;
+    color: #1D1D1F;
 }
-QTreeView::item:hover, QListView::item:hover {
+QTreeView::item:hover, QListView::item:hover, QTreeWidget::item:hover {
     background: rgba(0, 0, 0, 0.04);
     color: #000000;
 }
-QTreeView::item:selected, QListView::item:selected {
+QTreeView::item:selected, QListView::item:selected, QTreeWidget::item:selected {
     background-color: #007AFF;
     color: #FFFFFF;
 }
@@ -528,7 +582,7 @@ QPushButton:hover {
 QTextEdit, QPlainTextEdit {
     background-color: #FFFFFF;
     border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 8px;
     color: #1D1D1F;
     font-family: "SF Mono", "JetBrains Mono", "Consolas", monospace;
@@ -537,16 +591,21 @@ QTextEdit, QPlainTextEdit {
 QLineEdit {
     background: #FFFFFF;
     border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 12px;
-    padding: 6px 14px;
+    border-radius: 10px;
+    padding: 5px 12px;
     color: #1D1D1F;
     font-family: "SF Mono", "JetBrains Mono", "Consolas", monospace;
-    font-size: 12px;
+    font-size: 11px;
     selection-background-color: #007AFF;
 }
 QLineEdit:focus {
     border: 1.5px solid #007AFF;
     background: #FFFFFF;
+}
+QGraphicsView {
+    background-color: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
 }
 QStatusBar {
     background: #F5F5F7;
@@ -614,6 +673,21 @@ QToolBar {
     spacing: 4px;
     padding: 2px 4px;
 }
+QToolBar::separator {
+    background-color: #BACBE6;
+    width: 1.5px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+    margin-left: 8px;
+    margin-right: 8px;
+    border: none;
+}
+QFrame[frameShape="5"], QFrame[frameShape="4"] {
+    background-color: #BACBE6;
+    border: none;
+    color: #BACBE6;
+    width: 1.5px;
+}
 QToolButton {
     background: transparent;
     border: 1px solid transparent;
@@ -647,6 +721,47 @@ QLabel {
 }
 """
 
+_LOG_LIGHT_SCRIPT = """
+(function() {
+    var style = document.getElementById('_mac_light_style');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = '_mac_light_style';
+        document.head.appendChild(style);
+    }
+    style.innerHTML = 'html, body { background-color: #FFFFFF !important; color: #1D1D1F !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif !important; } a { color: #007AFF !important; text-decoration: none; } pre, code, .cxcmd { background-color: #F2F2F7 !important; color: #1D1D1F !important; border-radius: 4px; padding: 2px 4px; font-family: "SF Mono", Menlo, Consolas, monospace !important; }';
+})();
+"""
+
+try:
+    from chimerax.log.tool import Log
+    if not hasattr(Log, "_mac_light_patched"):
+        _orig_actually_show = Log._actually_show
+        def _mac_actually_show(self):
+            _orig_actually_show(self)
+            if hasattr(self, "log_window") and self.log_window:
+                p = self.log_window.page()
+                if p:
+                    p.setBackgroundColor(QtGui.QColor(255, 255, 255))
+                    p.runJavaScript(_LOG_LIGHT_SCRIPT)
+        Log._actually_show = _mac_actually_show
+        Log._mac_light_patched = True
+except Exception:
+    pass
+
+def apply_light_to_all_html_views(session=None):
+    if not session or not hasattr(session, "ui") or not hasattr(session.ui, "main_window"):
+        return
+    win = session.ui.main_window
+    if not win:
+        return
+    from chimerax.ui.widgets.htmlview import HtmlView
+    for hv in win.findChildren(HtmlView):
+        page = hv.page()
+        if page:
+            page.setBackgroundColor(QtGui.QColor(255, 255, 255))
+            page.runJavaScript(_LOG_LIGHT_SCRIPT)
+
 def configure_3d_canvas(session):
     if session:
         try:
@@ -669,33 +784,62 @@ def apply_theme(session=None, mode="light"):
         font = QtGui.QFont("Helvetica", 11)
     font.setStyleHint(QtGui.QFont.StyleHint.SansSerif)
     app.setFont(font)
+
+    palette = QtGui.QPalette()
+    palette.setColor(QtGui.QPalette.ColorRole.Window, QtGui.QColor("#F5F5F7"))
+    palette.setColor(QtGui.QPalette.ColorRole.WindowText, QtGui.QColor("#1D1D1F"))
+    palette.setColor(QtGui.QPalette.ColorRole.Base, QtGui.QColor("#FFFFFF"))
+    palette.setColor(QtGui.QPalette.ColorRole.AlternateBase, QtGui.QColor("#FBFBFC"))
+    palette.setColor(QtGui.QPalette.ColorRole.Text, QtGui.QColor("#1D1D1F"))
+    palette.setColor(QtGui.QPalette.ColorRole.Button, QtGui.QColor("#F5F5F7"))
+    palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor("#1D1D1F"))
+    palette.setColor(QtGui.QPalette.ColorRole.Highlight, QtGui.QColor("#007AFF"))
+    palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor("#FFFFFF"))
+    app.setPalette(palette)
     app.setStyleSheet(MACOS_LIGHT_PRO_QSS)
 
-    install_window_traffic_lights(session)
-    install_dock_traffic_lights(session)
-
-    QtCore.QTimer.singleShot(100, lambda: install_dock_traffic_lights(session))
-    QtCore.QTimer.singleShot(300, lambda: install_dock_traffic_lights(session))
-    QtCore.QTimer.singleShot(600, lambda: install_dock_traffic_lights(session))
-
-    apply_mac_icons_to_all_tabs(session)
-    QtCore.QTimer.singleShot(80, lambda: apply_mac_icons_to_all_tabs(session))
-    QtCore.QTimer.singleShot(300, lambda: apply_mac_icons_to_all_tabs(session))
-    QtCore.QTimer.singleShot(600, lambda: apply_mac_icons_to_all_tabs(session))
-
-    for tw in app.findChildren(QtWidgets.QTabWidget):
+    if session and hasattr(session, "ui") and session.ui:
+        ui = session.ui
+        ui.color_scheme = "light"
         try:
-            tw.currentChanged.connect(lambda idx: QtCore.QTimer.singleShot(50, lambda: apply_mac_icons_to_all_tabs(session)))
+            ui.styleHints().setColorScheme(QtCore.Qt.ColorScheme.Light)
+        except Exception:
+            pass
+        ui.dark_mode = lambda: False
+        ui.dark_css = lambda: ""
+        try:
+            set_default_color_scheme("light")
+        except Exception:
+            pass
+        try:
+            ui.triggers.activate_trigger("color scheme changed", None)
         except Exception:
             pass
 
+    install_window_traffic_lights(session)
+    install_dock_traffic_lights(session)
+    apply_mac_icons_to_all_tabs(session)
+    apply_light_to_all_html_views(session)
     configure_3d_canvas(session)
+
+    QtCore.QTimer.singleShot(150, lambda: apply_mac_icons_to_all_tabs(session))
+    QtCore.QTimer.singleShot(200, lambda: install_dock_traffic_lights(session))
+    QtCore.QTimer.singleShot(250, lambda: apply_light_to_all_html_views(session))
+
+    if not getattr(app, "_mac_tabs_hooked", False):
+        for tw in app.findChildren(QtWidgets.QTabWidget):
+            try:
+                tw.currentChanged.connect(lambda idx: QtCore.QTimer.singleShot(40, lambda: apply_mac_icons_to_all_tabs(session)))
+            except Exception:
+                pass
+        app._mac_tabs_hooked = True
 
     if session and hasattr(session, "triggers") and not getattr(session, "_mac_triggers_added", False):
         def on_session_restored(*args):
-            QtCore.QTimer.singleShot(100, lambda: configure_3d_canvas(session))
-            QtCore.QTimer.singleShot(150, lambda: apply_mac_icons_to_all_tabs(session))
-            QtCore.QTimer.singleShot(200, lambda: install_dock_traffic_lights(session))
+            QtCore.QTimer.singleShot(80, lambda: configure_3d_canvas(session))
+            QtCore.QTimer.singleShot(120, lambda: apply_mac_icons_to_all_tabs(session))
+            QtCore.QTimer.singleShot(160, lambda: install_dock_traffic_lights(session))
+            QtCore.QTimer.singleShot(200, lambda: apply_light_to_all_html_views(session))
         try:
             session.triggers.add_handler("end restore session", on_session_restored)
             session.triggers.add_handler("session open", on_session_restored)
@@ -711,7 +855,7 @@ try:
         def _mac_session_init(self, *args, **kwargs):
             _orig_session_init(self, *args, **kwargs)
             try:
-                QtCore.QTimer.singleShot(200, lambda: apply_theme(self, mode="light"))
+                QtCore.QTimer.singleShot(150, lambda: apply_theme(self, mode="light"))
             except Exception:
                 pass
         Session.__init__ = _mac_session_init
