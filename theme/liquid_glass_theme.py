@@ -369,19 +369,6 @@ try:
 except Exception:
     pass
 
-class MacDockWatcher(QtCore.QObject):
-    def eventFilter(self, obj, event):
-        if event.type() in (QtCore.QEvent.Type.ChildAdded, QtCore.QEvent.Type.Show):
-            if isinstance(obj, QtWidgets.QDockWidget) and not getattr(obj, "_mac_dock_styled", False):
-                obj.setTitleBarWidget(MacDockTitleBar(obj))
-                obj._mac_dock_styled = True
-            elif hasattr(event, "child") and callable(event.child):
-                child = event.child()
-                if isinstance(child, QtWidgets.QDockWidget) and not getattr(child, "_mac_dock_styled", False):
-                    child.setTitleBarWidget(MacDockTitleBar(child))
-                    child._mac_dock_styled = True
-        return False
-
 def install_window_traffic_lights(session=None):
     if not session or not hasattr(session, "ui") or not hasattr(session.ui, "main_window"):
         return
@@ -686,12 +673,6 @@ def apply_theme(session=None, mode="light"):
 
     install_window_traffic_lights(session)
     install_dock_traffic_lights(session)
-
-    if not getattr(app, "_mac_dock_watcher_installed", False):
-        watcher = MacDockWatcher(app)
-        app.installEventFilter(watcher)
-        app._mac_dock_watcher = watcher
-        app._mac_dock_watcher_installed = True
 
     QtCore.QTimer.singleShot(100, lambda: install_dock_traffic_lights(session))
     QtCore.QTimer.singleShot(300, lambda: install_dock_traffic_lights(session))
