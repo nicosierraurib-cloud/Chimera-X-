@@ -44,7 +44,6 @@ def main():
         src_folder = os.path.join(repo_root, folder)
         copy_directory_files(src_folder, icons_dest_primary, (".png", ".svg"))
         copy_directory_files(src_folder, icons_dest_secondary, (".png", ".svg"))
-    escaped_start = start_dir.replace("\\", "\\\\")
     pth_line = (
         f"import sys, os; p = r'{start_dir}'; "
         f"sys.path.insert(0, p) if os.path.exists(p) and p not in sys.path else None; "
