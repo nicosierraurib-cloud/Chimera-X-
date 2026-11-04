@@ -1,9 +1,21 @@
 import os
 import sys
+import gc
 import ctypes
+from functools import lru_cache
 from Qt import QtWidgets, QtGui, QtCore
 from chimerax.core.commands import register, CmdDesc, StringArg, run
 from chimerax.core.colors import set_default_color_scheme
+
+try:
+    gc.set_threshold(50000, 20, 20)
+except Exception:
+    pass
+
+try:
+    QtGui.QPixmapCache.setCacheLimit(65536)
+except Exception:
+    pass
 
 try:
     set_default_color_scheme("light")
@@ -19,6 +31,7 @@ _CANDIDATE_ICON_DIRS = (
 ICONS_DIR = next((d for d in _CANDIDATE_ICON_DIRS if d and os.path.exists(d)), _CANDIDATE_ICON_DIRS[0])
 _EXISTING_ICONS = frozenset(os.listdir(ICONS_DIR)) if os.path.exists(ICONS_DIR) else frozenset()
 _QICON_CACHE = {}
+_SUBPATH_BASENAME_CACHE = {}
 
 def get_cached_qicon(file_path):
     icon = _QICON_CACHE.get(file_path)
@@ -33,12 +46,24 @@ try:
         _orig_get_path = BundleInfo.get_path
         def _mac_get_path(self, subpath):
             if subpath:
-                fname = os.path.basename(subpath)
-                if fname in _EXISTING_ICONS:
-                    return os.path.join(ICONS_DIR, fname)
+                cached = _SUBPATH_BASENAME_CACHE.get(subpath)
+                if cached is None:
+                    fname = os.path.basename(subpath)
+                    cached = os.path.join(ICONS_DIR, fname) if fname in _EXISTING_ICONS else False
+                    _SUBPATH_BASENAME_CACHE[subpath] = cached
+                if cached:
+                    return cached
             return _orig_get_path(self, subpath)
         BundleInfo.get_path = _mac_get_path
         BundleInfo._mac_patched = True
+except Exception:
+    pass
+
+try:
+    import chimerax.ui.widgets.tabbedtoolbar as _ttb_mod
+    if not getattr(_ttb_mod, "_mac_split_cached", False):
+        _ttb_mod.split_title = lru_cache(maxsize=512)(_ttb_mod.split_title)
+        _ttb_mod._mac_split_cached = True
 except Exception:
     pass
 
@@ -588,7 +613,9 @@ def apply_mac_icons_to_all_tabs(session=None):
     if not tb_tool or not hasattr(tb_tool, "ttb"):
         return
     ttb = tb_tool.ttb
-    ttb.setStyleSheet(TOOLBAR_LIGHT_PRO_QSS)
+    if getattr(ttb, "_mac_qss_str", None) != TOOLBAR_LIGHT_PRO_QSS:
+        ttb.setStyleSheet(TOOLBAR_LIGHT_PRO_QSS)
+        ttb._mac_qss_str = TOOLBAR_LIGHT_PRO_QSS
 
     for tab_name, sections in getattr(ttb, "_buttons", {}).items():
         if not isinstance(sections, dict):
@@ -599,11 +626,12 @@ def apply_mac_icons_to_all_tabs(session=None):
             modified = False
             for bi in getattr(section, "_buttons", []):
                 icon_path = resolve_mac_icon(bi.title, getattr(bi, "description", ""), sec_name, tab_name)
-                if icon_path:
+                if icon_path and getattr(bi, "_mac_icon_path", None) != icon_path:
                     cached_icon = get_cached_qicon(icon_path)
                     if cached_icon:
                         bi.icon = cached_icon
                         bi.highlight_icon = None
+                        bi._mac_icon_path = icon_path
                         modified = True
             if modified and hasattr(section, "_redo_layout"):
                 try:
@@ -611,10 +639,13 @@ def apply_mac_icons_to_all_tabs(session=None):
                 except Exception:
                     pass
 
+    icon_sz = QtCore.QSize(28, 28)
     for b in ttb.findChildren(QtWidgets.QToolButton):
-        b.setIconSize(QtCore.QSize(28, 28))
-        if b.popupMode() == QtWidgets.QToolButton.ToolButtonPopupMode.MenuButtonPopup:
-            b.setMinimumWidth(max(b.minimumWidth(), 64))
+        if not getattr(b, "_mac_btn_sized", False):
+            b.setIconSize(icon_sz)
+            if b.popupMode() == QtWidgets.QToolButton.ToolButtonPopupMode.MenuButtonPopup:
+                b.setMinimumWidth(max(b.minimumWidth(), 64))
+            b._mac_btn_sized = True
 
 try:
     from chimerax.ui.widgets.tabbedtoolbar import _Section
@@ -1250,16 +1281,20 @@ def apply_light_to_all_html_views(session=None):
     if not win:
         return
     from chimerax.ui.widgets.htmlview import HtmlView
+    white = QtGui.QColor(255, 255, 255)
     for hv in win.findChildren(HtmlView):
         page = hv.page()
         if page:
-            page.setBackgroundColor(QtGui.QColor(255, 255, 255))
+            if not getattr(page, "_mac_bg_set", False):
+                page.setBackgroundColor(white)
+                page._mac_bg_set = True
             page.runJavaScript(_LOG_LIGHT_SCRIPT)
     if hasattr(session, "logger") and hasattr(session.logger, "logs"):
         for lg in session.logger.logs:
-            if hasattr(lg, "_actually_show"):
+            if hasattr(lg, "_actually_show") and not getattr(lg, "_mac_shown_once", False):
                 try:
                     lg._actually_show()
+                    lg._mac_shown_once = True
                 except Exception:
                     pass
 
