@@ -584,6 +584,21 @@ def apply_mac_icons_to_all_tabs(session=None):
 
     for b in ttb.findChildren(QtWidgets.QToolButton):
         b.setIconSize(QtCore.QSize(28, 28))
+        if b.popupMode() == QtWidgets.QToolButton.ToolButtonPopupMode.MenuButtonPopup:
+            b.setMinimumWidth(max(b.minimumWidth(), 64))
+
+try:
+    from chimerax.ui.widgets.tabbedtoolbar import _Section
+    if not hasattr(_Section, "_mac_update_btn_patched"):
+        _orig_update_button_action = _Section._update_button_action
+        def _mac_update_button_action(self, button, action):
+            _orig_update_button_action(self, button, action)
+            button.setIconSize(QtCore.QSize(28, 28))
+            button.setMinimumWidth(max(button.minimumWidth() + 8, 64))
+        _Section._update_button_action = _mac_update_button_action
+        _Section._mac_update_btn_patched = True
+except Exception:
+    pass
 
 MACOS_LIGHT_PRO_QSS = """
 QWidget {
@@ -741,6 +756,22 @@ QPushButton:hover {
 }
 QPushButton:pressed {
     background-color: #DCE5F4;
+}
+QToolButton::menu-button {
+    background-color: #FFFFFF;
+    border: 1px solid #D5DFEE;
+    border-radius: 6px;
+    width: 14px;
+    margin: 2px 1px;
+    subcontrol-origin: padding;
+    subcontrol-position: right;
+}
+QToolButton::menu-button:hover {
+    background-color: #F0F4FB;
+    border: 1px solid #BACBE6;
+}
+QToolButton::menu-button:pressed {
+    background-color: #E2EAF8;
 }
 QTextEdit, QPlainTextEdit {
     background-color: #FFFFFF;
@@ -949,7 +980,7 @@ QToolButton {
     font-weight: 500;
 }
 QToolButton[popupMode="1"] {
-    padding-right: 18px;
+    padding-right: 20px;
 }
 QToolButton:hover {
     background: #F0F4FB;
@@ -1181,6 +1212,18 @@ def apply_theme(session=None, mode="light"):
         except Exception:
             pass
 
+    if session and not getattr(session, "_mac_watcher_installed", False):
+        theme_file = r"C:\Users\Parfion\chimerax_start\liquid_glass_theme.py"
+        if os.path.exists(theme_file):
+            watcher = QtCore.QFileSystemWatcher([theme_file], app)
+            def _on_theme_file_changed(path):
+                if os.path.exists(theme_file):
+                    watcher.addPath(theme_file)
+                    QtCore.QTimer.singleShot(150, lambda: reload_theme_from_disk(session))
+            watcher.fileChanged.connect(_on_theme_file_changed)
+            session._mac_file_watcher = watcher
+            session._mac_watcher_installed = True
+
 try:
     from chimerax.core.session import Session
     if not hasattr(Session, "_mac_init_patched"):
@@ -1209,11 +1252,25 @@ def remove_theme(session=None):
         except Exception:
             pass
 
+def reload_theme_from_disk(session=None):
+    theme_file = r"C:\Users\Parfion\chimerax_start\liquid_glass_theme.py"
+    if os.path.exists(theme_file):
+        try:
+            with open(theme_file, "r", encoding="utf-8") as f:
+                code = f.read()
+            ns = dict(globals())
+            ns["session"] = session
+            exec(compile(code, theme_file, "exec"), ns)
+            return
+        except Exception:
+            pass
+    apply_theme(session, mode="light")
+
 def liquidglass_cmd(session, mode="light"):
     if mode.lower() in ("off", "disable", "reset", "default"):
         remove_theme(session)
     else:
-        apply_theme(session, mode=mode)
+        reload_theme_from_disk(session)
 
 try:
     cmd_desc = CmdDesc(
