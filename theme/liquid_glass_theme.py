@@ -7,6 +7,7 @@ UCSF ChimeraX - Apple macOS Sequoia "Light Mode Pro" & Full System Redesign
   integrados en la barra superior izquierda y en las cabeceras de todos los paneles.
 - Iconografía SF Symbols 100% individual y distintiva: 0 iconos compartidos o repetidos.
   Cada herramienta (Nucleótidos, Colores, Mapas, Médico, Marcadores, etc.) tiene su glifo único.
+- Colores Pasteles calibrados (#8EC5FC, #FF9AA2, #B5EAD7, #FFF3B0, #FFDAC1, #E2D1F9, #A0E7E5).
 - Persistencia total: Bloqueo de fondo negro ante apertura de sesiones (.cxs) y modelos.
 """
 
@@ -27,7 +28,7 @@ try:
         _orig_get_path = BundleInfo.get_path
 
         def _mac_get_path(self, subpath):
-            if subpath and (subpath.endswith(".png") or "icons" in subpath):
+            if subpath and (subpath.endswith(".png") or subpath.endswith(".svg") or "icons" in subpath):
                 fname = os.path.basename(subpath)
                 mac_p = os.path.join(ICONS_DIR, fname)
                 if os.path.exists(mac_p):
@@ -41,7 +42,7 @@ except Exception:
 
 
 # =============================================================================
-# 2. RESOLUTOR 1:1 EXACTO PARA CADA BOTÓN (CERO REPETICIONES)
+# 2. RESOLUTOR 1:1 EXACTO PARA CADA BOTÓN (CERO REPETICIONES / BESPOKE GLYPHS)
 # =============================================================================
 
 EXACT_SECTION_TITLE_MAP = {
@@ -105,12 +106,12 @@ EXACT_SECTION_TITLE_MAP = {
     ("Camera", "Orient"): "orient.png",
 
     # --- TAB: Map ---
-    ("Map", "Show"): "fullvolume.png",
+    ("Map", "Show"): "showmap.png",
     ("Map", "Hide"): "hidemap.png",
-    ("Style", "surface"): "surfshow.png",
+    ("Style", "surface"): "mapsurf.png",
     ("Style", "mesh"): "mesh.png",
     ("Style", "image"): "mapimage.png",
-    ("Style", "Transparent surface"): "mesh.png",
+    ("Style", "Transparent surface"): "icecube.png",
     ("Style", "Outline box"): "outlinebox.png",
     ("Steps", "Step 1"): "step1.png",
     ("Steps", "Step 2"): "step2.png",
@@ -125,9 +126,9 @@ EXACT_SECTION_TITLE_MAP = {
     ("Calculations", "Fit"): "fitmap.png",
     ("Calculations", "Subtract"): "diffmap.png",
     ("Calculations", "Smooth"): "smooth.png",
-    ("Rendering Modes", "XYZ slices"): "orthoplanes.png",
+    ("Rendering Modes", "XYZ slices"): "xyzslice.png",
     ("Rendering Modes", "Perpendicular slices"): "perpslice.png",
-    ("Rendering Modes", "Raycasting"): "fulllight.png",
+    ("Rendering Modes", "Raycasting"): "raycasting.svg",
 
     # --- TAB: Medical Image ---
     ("File", "Open DICOM"): "opendicom.png",
@@ -135,7 +136,7 @@ EXACT_SECTION_TITLE_MAP = {
     ("Style", "Slab"): "slab.png",
     ("Style", "Orthoplanes"): "orthoplanes.png",
     ("Style", "Full"): "fullvolume.png",
-    ("Style", "Outline box"): "outlinebox.png",
+    ("Style", "Outline box"): "cubeoutline.png",
     ("Color", "Airways"): "airways.png",
     ("Color", "Chest CT"): "chest.png",
     ("Color", "Brain CT"): "brain.png",
@@ -145,7 +146,7 @@ EXACT_SECTION_TITLE_MAP = {
     ("Mouse Mode", "Crop"): "crop.png",
     ("Mouse Mode", "Move planes"): "moveplanes.png",
     ("Mouse Mode", "Tilt slab"): "rotateslab.png",
-    ("Mouse Mode", "Tape"): "link.png",
+    ("Mouse Mode", "Tape"): "tape.png",
     ("Mouse Mode", "Windowing"): "windowing.png",
     ("Segmentation Controls", "Toggle Mouse Modes"): "mouse.png",
     ("Segmentation Controls", "Toggle Hand Modes"): "right_controller.png",
@@ -153,7 +154,7 @@ EXACT_SECTION_TITLE_MAP = {
     # --- TAB: Markers ---
     ("Place markers", "Maximum"): "maximum.png",
     ("Place markers", "Plane"): "plane.png",
-    ("Place markers", "Surface"): "surfshow.png",
+    ("Place markers", "Surface"): "surface.png",
     ("Place markers", "Center"): "center.png",
     ("Place markers", "Point"): "point.png",
     ("Adjust markers", "Link"): "link.png",
@@ -171,27 +172,27 @@ EXACT_SECTION_TITLE_MAP = {
     ("Movement", "Drag model"): "move_picked_model.png",
     ("Movement", "Move atoms"): "move_atoms.png",
     ("Movement", "Pivot"): "pivot.png",
-    ("Annotation", "Distance"): "link.png",
-    ("Annotation", "Label"): "sequence.png",
-    ("Annotation", "Move label"): "move.png",
+    ("Annotation", "Distance"): "distance.png",
+    ("Annotation", "Label"): "label.png",
+    ("Annotation", "Move label"): "movelabel.png",
     ("Annotation", "Key"): "ckicon.png",
     ("Clipping", "Clip"): "clip.png",
     ("Clipping", "Clip rotate"): "cliprot.png",
-    ("Clipping", "Zone"): "volzone.png",
+    ("Clipping", "Zone"): "zone.png",
     ("Map", "Contour level"): "contour.png",
     ("Map", "Move planes"): "moveplanes.png",
     ("Map", "Rotate slab"): "rotateslab.png",
     ("Map", "Crop"): "crop.png",
-    ("Map", "Tape"): "link.png",
-    ("Map", "Blob"): "surfshow.png",
-    ("Map", "Erase"): "delete.png",
-    ("Map", "Play series"): "play.png",
+    ("Map", "Tape"): "tape.png",
+    ("Map", "Blob"): "pickblobs.png",
+    ("Map", "Erase"): "eraser.png",
+    ("Map", "Play series"): "vseries.png",
     ("Map", "Windowing"): "windowing.png",
-    ("Structure Modification", "Bond rotation"): "rotate_atoms.png",
-    ("Structure Modification", "Swapaa"): "ball_stick.png",
-    ("Structure Modification", "Play coords"): "play.png",
-    ("Structure Modification", "Tug"): "move_atoms.png",
-    ("Structure Modification", "Minimize"): "maximum.png",
+    ("Structure Modification", "Bond rotation"): "bondrot.png",
+    ("Structure Modification", "Swapaa"): "swapaa.png",
+    ("Structure Modification", "Play coords"): "coordset.png",
+    ("Structure Modification", "Tug"): "tug.png",
+    ("Structure Modification", "Minimize"): "minimize.png",
     ("Other", "Next docked"): "nextdocking.png",
 }
 
@@ -249,7 +250,7 @@ def install_window_traffic_lights(session=None):
 
     # 🔴 Cerrar (#FF5F56)
     btn_close = QtWidgets.QPushButton(tl_container)
-    btn_close.setFixedSize(13, 13)
+    btn_close.setFixedSize(14, 14)
     btn_close.setToolTip("Cerrar")
     btn_close.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
     close_icon = os.path.join(ICONS_DIR, "mac_close.png").replace("\\", "/")
@@ -269,7 +270,7 @@ def install_window_traffic_lights(session=None):
 
     # 🟡 Minimizar (#FFBD2E)
     btn_min = QtWidgets.QPushButton(tl_container)
-    btn_min.setFixedSize(13, 13)
+    btn_min.setFixedSize(14, 14)
     btn_min.setToolTip("Minimizar")
     btn_min.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
     min_icon = os.path.join(ICONS_DIR, "mac_minimize.png").replace("\\", "/")
@@ -289,7 +290,7 @@ def install_window_traffic_lights(session=None):
 
     # 🟢 Zoom / Maximizar (#27C93F)
     btn_zoom = QtWidgets.QPushButton(tl_container)
-    btn_zoom.setFixedSize(13, 13)
+    btn_zoom.setFixedSize(14, 14)
     btn_zoom.setToolTip("Zoom / Pantalla completa")
     btn_zoom.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
     zoom_icon = os.path.join(ICONS_DIR, "mac_zoom.png").replace("\\", "/")
@@ -650,7 +651,7 @@ def apply_theme(session=None, mode="light"):
     if not app:
         return
 
-    # Tipografía Apple
+    # Tipografía Apple SF Pro
     font = QtGui.QFont("SF Pro Text", 11)
     if not font.exactMatch():
         font = QtGui.QFont("Helvetica Neue", 11)
@@ -662,7 +663,7 @@ def apply_theme(session=None, mode="light"):
     # Aplicar QSS global de modo claro
     app.setStyleSheet(MACOS_LIGHT_PRO_QSS)
 
-    # Traffic lights (🔴 🟡 🟢) en la barra de menú de la ventana
+    # Traffic lights (🔴 🟡 🟢) en la barra de menú de la ventana principal
     install_window_traffic_lights(session)
 
     # Reemplazo de iconos en todas las pestañas de forma exhaustiva
