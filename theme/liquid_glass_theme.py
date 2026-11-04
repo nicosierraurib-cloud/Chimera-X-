@@ -1,5 +1,6 @@
 import os
 import sys
+import ctypes
 from Qt import QtWidgets, QtGui, QtCore
 from chimerax.core.commands import register, CmdDesc, StringArg, run
 from chimerax.core.colors import set_default_color_scheme
@@ -209,6 +210,14 @@ def resolve_mac_icon(title, description="", section="", tab=""):
 
     return None
 
+def apply_win11_rounded_corners(widget):
+    try:
+        hwnd = int(widget.winId())
+        pref = ctypes.c_int(2)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(pref), ctypes.sizeof(pref))
+    except Exception:
+        pass
+
 class MacTrafficLightButton(QtWidgets.QAbstractButton):
     def __init__(self, fill_color, border_color, hover_color, glyph="", diameter=12, parent=None):
         super().__init__(parent)
@@ -323,6 +332,7 @@ class MacWindowHeader(QtWidgets.QWidget):
         super().__init__(main_window)
         self.win = main_window
         self.setFixedHeight(32)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet("background-color: #F5F5F7; border: none;")
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(14, 0, 14, 0)
@@ -368,10 +378,9 @@ class MacDockTitleBar(QtWidgets.QWidget):
     def __init__(self, dock_widget):
         super().__init__(dock_widget)
         self.dock = dock_widget
-        self.setFixedHeight(26)
-        self.setStyleSheet("background-color: #F2F2F7; border-bottom: 1px solid rgba(0, 0, 0, 0.08);")
+        self.setFixedHeight(30)
         layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(10, 2, 10, 2)
+        layout.setContentsMargins(14, 4, 14, 2)
         layout.setSpacing(6)
 
         btn_close = MacTrafficLightButton("#FF5F56", "#E0443E", "#FF3B30", "close", 12, self)
@@ -389,6 +398,8 @@ class MacDockTitleBar(QtWidgets.QWidget):
         btn_zoom = MacTrafficLightButton("#27C93F", "#1AAB29", "#34C759", "zoom", 12, self)
         def toggle_float():
             self.dock.setFloating(not self.dock.isFloating())
+            if self.dock.isFloating():
+                apply_win11_rounded_corners(self.dock)
         btn_zoom.clicked.connect(toggle_float)
         layout.addWidget(btn_zoom)
 
@@ -398,7 +409,66 @@ class MacDockTitleBar(QtWidgets.QWidget):
         layout.addStretch()
         self.dock.windowTitleChanged.connect(self.label.setText)
 
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        w = float(self.width())
+        h = float(self.height())
+        r = 12.0
+        left = 4.5
+        right = w - 4.5
+        top = 3.5
+        bottom = h
+        path = QtGui.QPainterPath()
+        path.moveTo(left, bottom)
+        path.lineTo(left, top + r)
+        path.arcTo(QtCore.QRectF(left, top, 2.0 * r, 2.0 * r), 180.0, -90.0)
+        path.lineTo(right - r, top)
+        path.arcTo(QtCore.QRectF(right - 2.0 * r, top, 2.0 * r, 2.0 * r), 90.0, -90.0)
+        path.lineTo(right, bottom)
+        path.closeSubpath()
+        painter.fillPath(path, QtGui.QColor("#F0F3F9"))
+        pen = QtGui.QPen(QtGui.QColor("#D5DFEE"))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        painter.drawPath(path)
+        painter.end()
+
 _HIDDEN_TITLE_DOCKS = frozenset(("Toolbar", "Command Line Interface", ""))
+
+def style_dock_content_card(dw, is_hidden_title=False):
+    w = dw.widget()
+    if not w:
+        return
+    w.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+    lay = w.layout()
+    if is_hidden_title:
+        title = dw.windowTitle().strip()
+        if title == "Command Line Interface":
+            w.setObjectName("MacCliCard")
+            w.setStyleSheet("QWidget#MacCliCard { background-color: #F5F5F7; border: none; }")
+            if lay:
+                lay.setContentsMargins(10, 4, 10, 4)
+                lay.setSpacing(8)
+        return
+    w.setObjectName("MacDockCard")
+    w.setStyleSheet(
+        "QWidget#MacDockCard {"
+        " background-color: #FFFFFF;"
+        " border-left: 1px solid #D5DFEE;"
+        " border-right: 1px solid #D5DFEE;"
+        " border-bottom: 1px solid #D5DFEE;"
+        " border-bottom-left-radius: 12px;"
+        " border-bottom-right-radius: 12px;"
+        " margin-left: 4px;"
+        " margin-right: 4px;"
+        " margin-bottom: 4px;"
+        "}"
+    )
+    if lay:
+        lay.setContentsMargins(8, 6, 8, 8)
+    for sa in w.findChildren(QtWidgets.QScrollArea):
+        sa.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
 def install_dock_traffic_lights(session=None):
     if not session or not hasattr(session, "ui") or not hasattr(session.ui, "main_window"):
@@ -414,30 +484,37 @@ def install_dock_traffic_lights(session=None):
                 empty = QtWidgets.QWidget(dw)
                 empty.setFixedHeight(0)
                 dw.setTitleBarWidget(empty)
+            style_dock_content_card(dw, is_hidden_title=True)
             continue
         if existing_tb is not None and type(existing_tb).__name__ != "MacDockTitleBar" and existing_tb.height() == 0:
+            style_dock_content_card(dw, is_hidden_title=True)
             continue
-        if getattr(dw, "_mac_dock_ver", 0) != 2:
+        if getattr(dw, "_mac_dock_ver", 0) != 3:
             title_bar = MacDockTitleBar(dw)
             dw.setTitleBarWidget(title_bar)
             dw._mac_dock_styled = True
-            dw._mac_dock_ver = 2
+            dw._mac_dock_ver = 3
+        style_dock_content_card(dw, is_hidden_title=False)
 
 try:
     from chimerax.ui.gui import _Qt
-    if getattr(_Qt, "_mac_dock_ver", 0) != 2:
+    if getattr(_Qt, "_mac_dock_ver", 0) != 3:
         _orig_qt_init = getattr(_Qt, "_orig_mac_qt_init", _Qt.__init__)
         _Qt._orig_mac_qt_init = _orig_qt_init
         def _mac_qt_init(self, tool_window, title, has_statusbar, hide_title_bar, main_window, close_destroys):
             _orig_qt_init(self, tool_window, title, has_statusbar, hide_title_bar, main_window, close_destroys)
-            if not hide_title_bar and hasattr(self, "dock_widget") and title not in _HIDDEN_TITLE_DOCKS:
-                title_bar = MacDockTitleBar(self.dock_widget)
-                self.dock_widget.setTitleBarWidget(title_bar)
-                self.dock_widget._mac_dock_styled = True
-                self.dock_widget._mac_dock_ver = 2
+            if hasattr(self, "dock_widget"):
+                if not hide_title_bar and title not in _HIDDEN_TITLE_DOCKS:
+                    title_bar = MacDockTitleBar(self.dock_widget)
+                    self.dock_widget.setTitleBarWidget(title_bar)
+                    self.dock_widget._mac_dock_styled = True
+                    self.dock_widget._mac_dock_ver = 3
+                    QtCore.QTimer.singleShot(50, lambda dw=self.dock_widget: style_dock_content_card(dw, False))
+                else:
+                    QtCore.QTimer.singleShot(50, lambda dw=self.dock_widget: style_dock_content_card(dw, True))
         _Qt.__init__ = _mac_qt_init
         _Qt._mac_dock_patched = True
-        _Qt._mac_dock_ver = 2
+        _Qt._mac_dock_ver = 3
 except Exception:
     pass
 
@@ -447,12 +524,14 @@ def install_window_traffic_lights(session=None):
     win = session.ui.main_window
     if not win:
         return
-    if getattr(win, "_mac_frameless_ver", 0) == 2:
+    if getattr(win, "_mac_frameless_ver", 0) == 3:
+        apply_win11_rounded_corners(win)
         return
     flags = win.windowFlags()
     if not (flags & QtCore.Qt.WindowType.FramelessWindowHint):
         win.setWindowFlags(flags | QtCore.Qt.WindowType.FramelessWindowHint)
         win.show()
+    apply_win11_rounded_corners(win)
     mb = win.menuBar()
     if mb:
         mb.setParent(None)
@@ -472,7 +551,7 @@ def install_window_traffic_lights(session=None):
         win.installEventFilter(resize_filter)
         win._mac_resize_filter = resize_filter
     win._mac_frameless_installed = True
-    win._mac_frameless_ver = 2
+    win._mac_frameless_ver = 3
 
 def apply_mac_icons_to_all_tabs(session=None):
     from chimerax.toolbar.tool import get_toolbar_singleton
@@ -519,36 +598,36 @@ QMainWindow {
     background-color: #F5F5F7;
 }
 QMainWindow::separator, QSplitter::handle {
-    background-color: rgba(0, 0, 0, 0.06);
-    width: 1px;
-    height: 1px;
+    background-color: transparent;
+    width: 2px;
+    height: 2px;
     border: none;
 }
 QMenuBar {
     background: #F5F5F7;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-    padding: 2px 8px 4px 8px;
+    border-bottom: 1px solid rgba(186, 203, 230, 0.45);
+    padding: 2px 10px 4px 10px;
     color: #1D1D1F;
 }
 QMenuBar::item {
     background: transparent;
     padding: 4px 10px;
-    border-radius: 5px;
+    border-radius: 8px;
     font-weight: 500;
 }
 QMenuBar::item:selected {
-    background: rgba(0, 0, 0, 0.06);
+    background: rgba(186, 203, 230, 0.35);
     color: #000000;
 }
 QMenu {
     background-color: rgba(255, 255, 255, 0.98);
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    border-radius: 10px;
-    padding: 5px;
+    border: 1px solid #D5DFEE;
+    border-radius: 12px;
+    padding: 6px;
 }
 QMenu::item {
     padding: 6px 24px 6px 12px;
-    border-radius: 6px;
+    border-radius: 8px;
     color: #1D1D1F;
 }
 QMenu::item:selected {
@@ -557,21 +636,26 @@ QMenu::item:selected {
 }
 QMenu::separator {
     height: 1px;
-    background: rgba(0, 0, 0, 0.08);
-    margin: 4px 6px;
+    background: #E6ECF5;
+    margin: 4px 8px;
+}
+QToolTip {
+    background-color: #FFFFFF;
+    color: #1D1D1F;
+    border: 1px solid #D5DFEE;
+    border-radius: 8px;
+    padding: 4px 8px;
 }
 QDockWidget {
-    background-color: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 10px;
-    margin: 2px;
+    background-color: transparent;
+    border: none;
 }
 QDockWidget::title {
     text-align: left;
-    background: #F2F2F7;
+    background: transparent;
     padding: 4px;
-    border-top-left-radius: 10px;
-    border-top-right-radius: 10px;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
 }
 QDockWidget::close-button, QDockWidget::float-button {
     width: 0px;
@@ -583,56 +667,85 @@ QDockWidget::close-button, QDockWidget::float-button {
 }
 QTreeView, QListView, QTableView, QTreeWidget, QTableWidget {
     background-color: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 8px;
+    border: 1px solid #E2E8F2;
+    border-radius: 10px;
     padding: 4px;
     color: #1D1D1F;
-    alternate-background-color: #FBFBFC;
+    alternate-background-color: #F9FAFC;
+}
+QHeaderView {
+    background-color: transparent;
+    border: none;
 }
 QHeaderView::section {
-    background-color: #F5F5F7;
+    background-color: #F2F5FA;
     color: #1D1D1F;
     border: none;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-    border-right: 1px solid rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid #DCE4F0;
+    border-right: 1px solid #E8EEF7;
     padding: 5px 8px;
     font-weight: 600;
     font-size: 11px;
 }
-QHeaderView {
-    background-color: #F5F5F7;
-    border: none;
+QHeaderView::section:first {
+    border-top-left-radius: 8px;
+}
+QHeaderView::section:last {
+    border-top-right-radius: 8px;
+    border-right: none;
 }
 QTreeView::item, QListView::item, QTreeWidget::item {
     padding: 4px 6px;
-    border-radius: 6px;
+    border-radius: 7px;
     color: #1D1D1F;
 }
 QTreeView::item:hover, QListView::item:hover, QTreeWidget::item:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: rgba(186, 203, 230, 0.25);
     color: #000000;
 }
 QTreeView::item:selected, QListView::item:selected, QTreeWidget::item:selected {
     background-color: #007AFF;
     color: #FFFFFF;
 }
+QCheckBox {
+    spacing: 6px;
+    color: #1D1D1F;
+}
+QCheckBox::indicator {
+    width: 15px;
+    height: 15px;
+    border-radius: 5px;
+    border: 1.5px solid #B8C7DD;
+    background-color: #FFFFFF;
+}
+QCheckBox::indicator:hover {
+    border-color: #007AFF;
+}
+QCheckBox::indicator:checked {
+    background-color: #007AFF;
+    border-color: #007AFF;
+}
 QPushButton {
-    background-color: rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    border-radius: 6px;
-    padding: 3px 8px;
+    background-color: #F4F6FB;
+    border: 1px solid #D8E1F0;
+    border-radius: 8px;
+    padding: 2px 7px;
+    margin: 0px;
     color: #1D1D1F;
     font-weight: 500;
     font-size: 11px;
 }
 QPushButton:hover {
-    background-color: rgba(0, 0, 0, 0.09);
-    border: 1px solid rgba(0, 0, 0, 0.16);
+    background-color: #E8EEF8;
+    border: 1px solid #BACBE6;
+}
+QPushButton:pressed {
+    background-color: #DCE5F4;
 }
 QTextEdit, QPlainTextEdit {
     background-color: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 8px;
+    border: 1px solid #DCE4F0;
+    border-radius: 10px;
     padding: 8px;
     color: #1D1D1F;
     font-family: "SF Mono", "JetBrains Mono", "Consolas", monospace;
@@ -640,8 +753,8 @@ QTextEdit, QPlainTextEdit {
 }
 QLineEdit {
     background: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 10px;
+    border: 1px solid #D5DFEE;
+    border-radius: 11px;
     padding: 5px 12px;
     color: #1D1D1F;
     font-family: "SF Mono", "JetBrains Mono", "Consolas", monospace;
@@ -652,55 +765,114 @@ QLineEdit:focus {
     border: 1.5px solid #007AFF;
     background: #FFFFFF;
 }
+QComboBox {
+    background-color: #FFFFFF;
+    border: 1px solid #D5DFEE;
+    border-radius: 11px;
+    padding: 4px 12px;
+    color: #1D1D1F;
+    font-family: "SF Mono", "JetBrains Mono", "Consolas", monospace;
+    font-size: 11px;
+    selection-background-color: #007AFF;
+}
+QComboBox:hover {
+    border: 1px solid #BACBE6;
+}
+QComboBox:focus, QComboBox:on {
+    border: 1.5px solid #007AFF;
+    background-color: #FFFFFF;
+}
+QComboBox QLineEdit {
+    border: none;
+    background: transparent;
+    padding: 0px;
+    border-radius: 0px;
+}
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 22px;
+    border: none;
+    border-top-right-radius: 11px;
+    border-bottom-right-radius: 11px;
+    background: transparent;
+}
+QComboBox QAbstractItemView {
+    background-color: #FFFFFF;
+    border: 1px solid #D5DFEE;
+    border-radius: 10px;
+    padding: 4px;
+    selection-background-color: #007AFF;
+    selection-color: #FFFFFF;
+}
+QSpinBox, QDoubleSpinBox {
+    background-color: #FFFFFF;
+    border: 1px solid #D5DFEE;
+    border-radius: 9px;
+    padding: 3px 8px;
+    color: #1D1D1F;
+}
+QGroupBox {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F2;
+    border-radius: 12px;
+    margin-top: 8px;
+    padding: 8px;
+}
+QScrollArea {
+    background: transparent;
+    border: none;
+}
 QGraphicsView {
     background-color: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 8px;
+    border: 1px solid #E2E8F2;
+    border-radius: 10px;
 }
 QStatusBar {
     background: #F5F5F7;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    border-top: 1px solid rgba(186, 203, 230, 0.45);
     color: rgba(60, 60, 67, 0.7);
     font-size: 11px;
 }
 QStatusBar QToolButton {
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 6px;
+    background: #FFFFFF;
+    border: 1px solid #DCE4F0;
+    border-radius: 8px;
     padding: 2px;
+    margin: 1px 2px;
 }
 QStatusBar QToolButton:hover {
-    background: rgba(0, 0, 0, 0.06);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: #EBF0F9;
+    border: 1px solid #BACBE6;
 }
 QScrollBar:vertical {
-    width: 6px;
+    width: 7px;
     background: transparent;
-    margin: 2px;
+    margin: 3px 1px;
 }
 QScrollBar::handle:vertical {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(142, 158, 184, 0.45);
     min-height: 24px;
-    border-radius: 3px;
+    border-radius: 3.5px;
 }
 QScrollBar::handle:vertical:hover {
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(110, 130, 165, 0.7);
 }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0px;
 }
 QScrollBar:horizontal {
-    height: 6px;
+    height: 7px;
     background: transparent;
-    margin: 2px;
+    margin: 1px 3px;
 }
 QScrollBar::handle:horizontal {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(142, 158, 184, 0.45);
     min-width: 24px;
-    border-radius: 3px;
+    border-radius: 3.5px;
 }
 QScrollBar::handle:horizontal:hover {
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(110, 130, 165, 0.7);
 }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     width: 0px;
@@ -713,33 +885,33 @@ QTabWidget {
     border: none;
 }
 QTabWidget::pane {
-    background: rgba(255, 255, 255, 0.96);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 12px;
-    margin: 2px 6px 4px 6px;
-    padding: 2px 4px;
+    background: #FFFFFF;
+    border: 1px solid #D5DFEE;
+    border-radius: 16px;
+    margin: 2px 8px 5px 8px;
+    padding: 4px 6px;
 }
 QTabBar {
     background: transparent;
-    margin-left: 6px;
+    margin-left: 8px;
 }
 QTabBar::tab {
-    background: rgba(0, 0, 0, 0.04);
+    background: rgba(186, 203, 230, 0.22);
     border: 1px solid transparent;
-    border-radius: 7px;
-    padding: 4px 14px;
+    border-radius: 10px;
+    padding: 5px 15px;
     margin: 2px 3px;
-    color: rgba(60, 60, 67, 0.7);
+    color: rgba(60, 60, 67, 0.75);
     font-weight: 500;
     font-size: 11px;
 }
 QTabBar::tab:hover:!selected {
-    background: rgba(0, 0, 0, 0.08);
+    background: rgba(186, 203, 230, 0.4);
     color: #1D1D1F;
 }
 QTabBar::tab:selected {
     background: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.12);
+    border: 1px solid #D0DCF0;
     color: #1D1D1F;
     font-weight: 600;
 }
@@ -751,9 +923,10 @@ QToolBar {
 }
 QToolBar::separator {
     background-color: #BACBE6;
-    width: 1.5px;
-    margin-top: 6px;
-    margin-bottom: 6px;
+    width: 2px;
+    border-radius: 1px;
+    margin-top: 8px;
+    margin-bottom: 8px;
     margin-left: 8px;
     margin-right: 8px;
     border: none;
@@ -761,35 +934,36 @@ QToolBar::separator {
 QFrame[frameShape="5"], QFrame[frameShape="4"] {
     background-color: #BACBE6;
     border: none;
+    border-radius: 1px;
     color: #BACBE6;
-    width: 1.5px;
+    width: 2px;
 }
 QToolButton {
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 8px;
-    padding: 3px 5px;
+    border-radius: 10px;
+    padding: 4px 6px;
     margin: 1px;
     color: #1D1D1F;
     font-size: 10px;
     font-weight: 500;
 }
 QToolButton:hover {
-    background: rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: #F0F4FB;
+    border: 1px solid #D5E0F2;
     color: #000000;
 }
 QToolButton:pressed {
-    background: rgba(0, 0, 0, 0.1);
+    background: #E2EAF8;
 }
 QToolButton:checked {
-    background: rgba(0, 122, 255, 0.15);
+    background: rgba(0, 122, 255, 0.14);
     border: 1px solid #007AFF;
     color: #007AFF;
     font-weight: 600;
 }
 QLabel {
-    color: rgba(60, 60, 67, 0.5);
+    color: rgba(60, 60, 67, 0.52);
     font-size: 9px;
     font-weight: 600;
     text-transform: uppercase;
@@ -815,28 +989,38 @@ a:hover {
     text-decoration: underline !important;
 }
 pre, code, .cxcmd {
-    background-color: #F2F2F7 !important;
+    background-color: #F4F7FC !important;
     color: #1D1D1F !important;
-    border-left: 3px solid #BACBE6 !important;
-    border-radius: 5px !important;
-    padding: 4px 8px !important;
+    border: 1px solid #E4EBF5 !important;
+    border-left: 3.5px solid #BACBE6 !important;
+    border-radius: 9px !important;
+    padding: 5px 10px !important;
     margin: 5px 0 !important;
     font-family: "SF Mono", "Consolas", monospace !important;
     font-size: 11px !important;
 }
 table {
-    border-collapse: collapse !important;
-    border: 1px solid #E5E5EA !important;
-    border-radius: 6px !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    border: 1px solid #DCE4F0 !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
     margin: 6px 0 !important;
     font-size: 11px !important;
 }
 th, td {
-    border: 1px solid #E5E5EA !important;
-    padding: 4px 8px !important;
+    border-bottom: 1px solid #E8EEF7 !important;
+    border-right: 1px solid #E8EEF7 !important;
+    padding: 5px 10px !important;
+}
+th:last-child, td:last-child {
+    border-right: none !important;
+}
+tr:last-child td {
+    border-bottom: none !important;
 }
 th {
-    background-color: #F5F5F7 !important;
+    background-color: #F2F5FA !important;
     color: #1D1D1F !important;
     font-weight: 600 !important;
 }
@@ -851,7 +1035,7 @@ _LOG_LIGHT_SCRIPT = """
         if (document.head) document.head.appendChild(style);
     }
     if (style) {
-        style.innerHTML = 'html, body { background-color: #FFFFFF !important; color: #1D1D1F !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", sans-serif !important; font-size: 12px !important; } a { color: #007AFF !important; text-decoration: none !important; } pre, code, .cxcmd { background-color: #F2F2F7 !important; color: #1D1D1F !important; border-left: 3px solid #BACBE6 !important; border-radius: 5px !important; padding: 4px 8px !important; font-family: "SF Mono", Menlo, Consolas, monospace !important; } table { border-collapse: collapse !important; border: 1px solid #E5E5EA !important; } th, td { border: 1px solid #E5E5EA !important; padding: 4px 8px !important; } th { background-color: #F5F5F7 !important; }';
+        style.innerHTML = 'html, body { background-color: #FFFFFF !important; color: #1D1D1F !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", sans-serif !important; font-size: 12px !important; } a { color: #007AFF !important; text-decoration: none !important; } pre, code, .cxcmd { background-color: #F4F7FC !important; color: #1D1D1F !important; border: 1px solid #E4EBF5 !important; border-left: 3.5px solid #BACBE6 !important; border-radius: 9px !important; padding: 5px 10px !important; font-family: "SF Mono", Menlo, Consolas, monospace !important; } table { border-collapse: separate !important; border-spacing: 0 !important; border: 1px solid #DCE4F0 !important; border-radius: 10px !important; overflow: hidden !important; } th, td { border-bottom: 1px solid #E8EEF7 !important; border-right: 1px solid #E8EEF7 !important; padding: 5px 10px !important; } th { background-color: #F2F5FA !important; }';
     }
 })();
 """
@@ -919,9 +1103,9 @@ def apply_theme(session=None, mode="light"):
     palette.setColor(QtGui.QPalette.ColorRole.Window, QtGui.QColor("#F5F5F7"))
     palette.setColor(QtGui.QPalette.ColorRole.WindowText, QtGui.QColor("#1D1D1F"))
     palette.setColor(QtGui.QPalette.ColorRole.Base, QtGui.QColor("#FFFFFF"))
-    palette.setColor(QtGui.QPalette.ColorRole.AlternateBase, QtGui.QColor("#FBFBFC"))
+    palette.setColor(QtGui.QPalette.ColorRole.AlternateBase, QtGui.QColor("#F9FAFC"))
     palette.setColor(QtGui.QPalette.ColorRole.Text, QtGui.QColor("#1D1D1F"))
-    palette.setColor(QtGui.QPalette.ColorRole.Button, QtGui.QColor("#F5F5F7"))
+    palette.setColor(QtGui.QPalette.ColorRole.Button, QtGui.QColor("#F4F6FB"))
     palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor("#1D1D1F"))
     palette.setColor(QtGui.QPalette.ColorRole.Highlight, QtGui.QColor("#007AFF"))
     palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor("#FFFFFF"))
