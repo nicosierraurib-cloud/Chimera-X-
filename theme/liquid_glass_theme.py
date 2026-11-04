@@ -16,19 +16,6 @@ def get_cached_qicon(file_path):
     return icon
 
 try:
-    import chimerax.shortcuts
-    if not hasattr(chimerax.shortcuts, "bundle_api"):
-        import importlib.util
-        orig_p = r"C:\Program Files\ChimeraX 1.12\bin\Lib\site-packages\chimerax\shortcuts\__init__.py"
-        if os.path.exists(orig_p):
-            spec = importlib.util.spec_from_file_location("chimerax.shortcuts", orig_p)
-            mod = importlib.util.module_from_spec(spec)
-            sys.modules["chimerax.shortcuts"] = mod
-            spec.loader.exec_module(mod)
-except Exception:
-    pass
-
-try:
     from chimerax.core.toolshed.info import BundleInfo
     if not hasattr(BundleInfo, "_mac_patched"):
         _orig_get_path = BundleInfo.get_path
