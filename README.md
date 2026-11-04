@@ -31,6 +31,7 @@ Chimera-X-/
     ├── generate_all_vector_icons.py    # Compilador PNG (Pillow)
     └── generate_svgs.py                # Generador de trazados SVG
 
-## 📄 Licencia
+```
+## Licencia
 
 Este proyecto se distribuye bajo la licencia MIT. Las marcas y nomenclaturas de UCSF ChimeraX pertenecen a sus respectivos titulares y a la Universidad de California, San Francisco (UCSF).
