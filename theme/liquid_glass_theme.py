@@ -14,38 +14,8 @@ try:
     QtGui.QPixmapCache.setCacheLimit(65536)
 except Exception:
     pass
-_CURRENT_MODE = globals().get("_CURRENT_MODE", "light")
+_CURRENT_MODE = globals().get("_CURRENT_MODE", "gray")
 _THEME_PALETTES = {
-    "light": {
-        "win_bg": "#F5F5F7",
-        "card_bg": "#FFFFFF",
-        "alt_bg": "#F9FAFC",
-        "header_bg": "#F0F3F9",
-        "border": "#D5DFEE",
-        "border_soft": "#E2E8F2",
-        "sep_color": "#BACBE6",
-        "text": "#1D1D1F",
-        "text_hover": "#000000",
-        "text_muted": "rgba(60, 60, 67, 0.65)",
-        "btn_bg": "#F4F6FB",
-        "btn_hover": "#E8EEF8",
-        "btn_pressed": "#DCE5F4",
-        "menu_btn_bg": "#FFFFFF",
-        "tab_unselected": "rgba(186, 203, 230, 0.22)",
-        "tab_hover": "rgba(186, 203, 230, 0.40)",
-        "accent": "#007AFF",
-        "code_bg": "#F4F7FC",
-        "table_th_bg": "#F2F5FA",
-        "scroll_thumb": "rgba(142, 158, 184, 0.45)",
-        "scroll_hover": "rgba(110, 130, 165, 0.70)",
-        "canvas_rgb": (0.961, 0.961, 0.969, 1.0),
-        "silhouette_color": "#3A3A3C",
-        "dwm_dark": 0,
-        "dwm_caption": 0x00F7F5F5,
-        "dwm_text": 0x001F1D1D,
-        "scheme": "light",
-        "qcolor_bg": (255, 255, 255),
-    },
     "gray": {
         "win_bg": "#D5DBE5",
         "card_bg": "#E4E8F0",
@@ -109,18 +79,16 @@ _THEME_PALETTES = {
 }
 def normalize_mode(mode):
     if not mode:
-        return "light"
-    m = mode.lower().strip()
-    if m in ("gray", "grey", "gris", "grisaceo"):
         return "gray"
+    m = mode.lower().strip()
     if m in ("dark", "oscuro", "night"):
         return "dark"
-    return "light"
+    return "gray"
 def get_current_mode():
     app = QtWidgets.QApplication.instance()
     if app and hasattr(app, "_mac_current_mode"):
-        return app._mac_current_mode
-    return _CURRENT_MODE
+        return normalize_mode(app._mac_current_mode)
+    return normalize_mode(_CURRENT_MODE)
 def set_current_mode(mode):
     global _CURRENT_MODE
     norm = normalize_mode(mode)
@@ -504,7 +472,7 @@ class MacWindowHeader(QtWidgets.QWidget):
         layout.addWidget(self.title_lbl)
         layout.addStretch()
         self._mode_btns = {}
-        for mode_key, label_text in (("light", "Claro"), ("gray", "Gris"), ("dark", "Oscuro")):
+        for mode_key, label_text in (("gray", "Gris"), ("dark", "Oscuro")):
             mb = QtWidgets.QPushButton(label_text, self)
             mb.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             mb.setFixedHeight(20)
@@ -1487,8 +1455,7 @@ def apply_light_to_sideview_and_sequences(session=None):
             pass
 def apply_theme(session=None, mode=None):
     global _CURRENT_MODE
-    if mode is not None:
-        set_current_mode(mode)
+    set_current_mode(mode if mode is not None else get_current_mode())
     pal = get_palette_dict(_CURRENT_MODE)
     app = QtWidgets.QApplication.instance()
     if not app:
@@ -1634,7 +1601,7 @@ def liquidglass_cmd(session, mode=None):
 try:
     cmd_desc = CmdDesc(
         optional=[("mode", StringArg)],
-        synopsis="macOS Sequoia Light, Gray & Dark Pro Mode"
+        synopsis="macOS Sequoia Gray & Dark Pro Mode"
     )
     register("liquidglass", cmd_desc, liquidglass_cmd)
 except Exception:
