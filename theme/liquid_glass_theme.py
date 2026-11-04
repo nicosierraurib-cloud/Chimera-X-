@@ -112,6 +112,9 @@ _RAW_MAP = {
     ("Background", "White"): "whitebg.png",
     ("Background", "Gray"): "graybg.png",
     ("Background", "Black"): "blackbg.png",
+    ("Lighting", "Simple"): "simplelight.png",
+    ("Lighting", "Soft"): "softlight.png",
+    ("Lighting", "Full"): "fulllight.png",
     ("Lighting & Effects", "Simple"): "simplelight.png",
     ("Lighting & Effects", "Soft"): "softlight.png",
     ("Lighting & Effects", "Full"): "fulllight.png",
@@ -626,12 +629,11 @@ def apply_mac_icons_to_all_tabs(session=None):
             modified = False
             for bi in getattr(section, "_buttons", []):
                 icon_path = resolve_mac_icon(bi.title, getattr(bi, "description", ""), sec_name, tab_name)
-                if icon_path and getattr(bi, "_mac_icon_path", None) != icon_path:
+                if icon_path:
                     cached_icon = get_cached_qicon(icon_path)
-                    if cached_icon:
+                    if cached_icon and (bi.icon is not cached_icon or bi.highlight_icon is not None):
                         bi.icon = cached_icon
                         bi.highlight_icon = None
-                        bi._mac_icon_path = icon_path
                         modified = True
             if modified and hasattr(section, "_redo_layout"):
                 try:
