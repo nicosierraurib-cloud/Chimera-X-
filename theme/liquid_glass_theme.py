@@ -95,7 +95,7 @@ _TRANSLATION_TABLE = {'Idioma': {'en_US': 'Language', 'zh_CN': '\u8bed\u8a00', '
 def _clean_key(text):
     if not text:
         return ""
-    s = text.replace("&", "").strip()
+    s = text.replace("&", "").replace("\ufeff", "").replace("\u9518", "").strip()
     return " ".join(s.split())
 def _tr(text, lang=None):
     if not text:
@@ -208,29 +208,95 @@ def apply_language(session=None, lang_code=None):
             except Exception:
                 mb = None
         if mb and is_cpp_valid(mb):
-            canonical_menus = {0: "File", 1: "Edit", 2: "Select", 3: "Actions", 4: "Tools", 5: "Favorites", 6: "Presets", 7: "Help"}
-            for idx, act in enumerate(mb.actions()):
-                orig_m = canonical_menus.get(idx)
-                if not orig_m:
-                    orig_m = act.property("_mac_orig_title")
-                    if not orig_m:
-                        orig_m = _clean_key(act.text())
-                        act.setProperty("_mac_orig_title", orig_m)
+            canonical_order = ["File", "Edit", "Select", "Actions", "Tools", "Favorites", "Presets", "Help"]
+            canonical_aliases = {
+                "file": "File", "archivo": "File", "fichier": "File",
+                "edit": "Edit", "edicion": "Edit", "edici\u00f3n": "Edit", "edition": "Edit",
+                "select": "Select", "seleccionar": "Select", "selectionner": "Select",
+                "actions": "Actions", "acciones": "Actions",
+                "tools": "Tools", "herramientas": "Tools", "outils": "Tools",
+                "favorites": "Favorites", "favoritos": "Favorites", "favoris": "Favorites",
+                "presets": "Presets", "ajustes predefinidos": "Presets", "preajustes": "Presets", "prereglages": "Presets", "pr\u00e9r\u00e9glages": "Presets",
+                "help": "Help", "ayuda": "Help", "aide": "Help",
+            }
+            tools_m = getattr(mw, "tools_menu", None)
+            faves_m = getattr(mw, "favorites_menu", None)
+            presets_m = getattr(mw, "presets_menu", None)
+            if is_cpp_valid(tools_m):
+                tools_m.setObjectName("Tools")
+            if is_cpp_valid(faves_m):
+                faves_m.setObjectName("Favorites")
+            if is_cpp_valid(presets_m):
+                presets_m.setObjectName("Presets")
+            found_menus = {}
+            actions_to_remove = []
+            for act in list(mb.actions()):
+                m = act.menu()
+                obj_id = m.objectName() if is_cpp_valid(m) else ""
+                key = None
+                if obj_id in canonical_order:
+                    key = obj_id
+                elif is_cpp_valid(m) and m is tools_m:
+                    key = "Tools"
+                elif is_cpp_valid(m) and m is faves_m:
+                    key = "Favorites"
+                elif is_cpp_valid(m) and m is presets_m:
+                    key = "Presets"
                 else:
-                    act.setProperty("_mac_orig_title", orig_m)
-                act.setText(_tr(orig_m, cur_lang))
+                    prop_key = act.property("_mac_canonical_key")
+                    if prop_key in canonical_order:
+                        key = prop_key
+                    else:
+                        cleaned = _clean_key(act.text()).lower()
+                        if cleaned in canonical_aliases:
+                            key = canonical_aliases[cleaned]
+                if key and key in canonical_order:
+                    if key not in found_menus:
+                        found_menus[key] = act
+                        act.setProperty("_mac_canonical_key", key)
+                        if is_cpp_valid(m):
+                            m.setObjectName(key)
+                    else:
+                        actions_to_remove.append(act)
+                else:
+                    raw_txt = act.text()
+                    if "\ufeff" in raw_txt or "\u9518" in raw_txt or raw_txt.strip() in ("", "\ufeff", "\u9518") or _clean_key(raw_txt).lower() in ("cadenas", "chains", "estructura", "structure"):
+                        actions_to_remove.append(act)
+            for act in actions_to_remove:
+                try:
+                    mb.removeAction(act)
+                except Exception:
+                    pass
+            ordered_acts = [found_menus[k] for k in canonical_order if k in found_menus]
+            if len(ordered_acts) == len(canonical_order):
+                current_acts = list(mb.actions())
+                if current_acts != ordered_acts:
+                    for a in current_acts:
+                        mb.removeAction(a)
+                    for a in ordered_acts:
+                        mb.addAction(a)
+            for k, act in found_menus.items():
+                act.setText(_tr(k, cur_lang))
                 menu = act.menu()
-                if menu:
+                if is_cpp_valid(menu):
                     for sub_act in menu.actions():
                         orig_sm = sub_act.property("_mac_orig_title")
                         if not orig_sm:
                             orig_sm = _clean_key(sub_act.text())
-                            sub_act.setProperty("_mac_orig_title", orig_sm)
-                        sub_act.setText(_tr(orig_sm, cur_lang))
+                            if orig_sm:
+                                sub_act.setProperty("_mac_orig_title", orig_sm)
+                        if orig_sm:
+                            sub_act.setText(_tr(orig_sm, cur_lang))
         hdr = getattr(mw, "_mac_header_widget", None)
         if is_cpp_valid(hdr) and hasattr(hdr, "refresh_theme"):
             try:
                 hdr.refresh_theme()
+            except Exception:
+                pass
+        selector = getattr(mw, "_mac_lang_selector", None)
+        if is_cpp_valid(selector) and hasattr(selector, "refresh_styles"):
+            try:
+                selector.refresh_styles()
             except Exception:
                 pass
         if hasattr(mw, "rapid_access") and mw.rapid_access:
@@ -780,10 +846,6 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         self._curtain = None
         self._msg_font = QtGui.QFont("Segoe UI", 10)
         self._msg_font.setWeight(QtGui.QFont.Weight.Medium)
-        self._showing_lang_selector = False
-        self._lang_container = QtWidgets.QWidget(self)
-        self._lang_container.hide()
-        self._init_lang_selector()
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(15)
         self._timer.timeout.connect(self._on_tick)
@@ -796,122 +858,10 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         if self._curtain is None or self._curtain.parentWidget() is not win:
             self._curtain = MacInternalCurtain(win, self)
         return self._curtain
-    def _init_lang_selector(self):
-        layout = QtWidgets.QVBoxLayout(self._lang_container)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(14)
-        lt_str = "Select Language  \\u2022  Seleccionar Idioma"
-        if chr(92) in lt_str:
-            try:
-                lt_str = lt_str.encode("utf-8").decode("unicode_escape")
-            except Exception:
-                pass
-        self._lang_title = QtWidgets.QLabel(lt_str, self._lang_container)
-        self._lang_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._lang_title)
-        self._lang_sub = QtWidgets.QLabel("Choose your interface language / Elige el idioma de la interfaz", self._lang_container)
-        self._lang_sub.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._lang_sub)
-        layout.addSpacing(6)
-        grid = QtWidgets.QGridLayout()
-        grid.setSpacing(12)
-        langs = [
-            ("English (US)", "en_US"),
-            ("\\u4e2d\\u6587 (Mandar\\u00edn)", "zh_CN"),
-            ("Espa\\u00f1ol (Latino)", "es_LA"),
-            ("\\u0939\\u093f\\u0928\\u094d\\u0926\\u0940 (Hindi)", "hi_IN"),
-            ("\\u0627\\u0644\\u0639\\u0631\\u0628\\u064a\\u0629 (\\u00c1rabe)", "ar_SA"),
-            ("Fran\\u00e7ais (Franc\\u00e9s)", "fr_FR"),
-        ]
-        self._lang_buttons = []
-        for idx, (label, code) in enumerate(langs):
-            row = idx // 2
-            col = idx % 2
-            lbl_txt = label
-            if chr(92) in lbl_txt:
-                try:
-                    lbl_txt = lbl_txt.encode("utf-8").decode("unicode_escape")
-                except Exception:
-                    pass
-            btn = QtWidgets.QPushButton(lbl_txt, self._lang_container)
-            btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-            btn.setFixedHeight(44)
-            btn.clicked.connect(lambda chk=False, c=code: self._on_language_picked(c))
-            grid.addWidget(btn, row, col)
-            self._lang_buttons.append(btn)
-        layout.addLayout(grid)
-        layout.addStretch()
-    def _refresh_lang_styles(self):
-        is_dark = get_current_mode() == "dark"
-        title_color = "#F5F5F7" if is_dark else "#1D1D1F"
-        sub_color = "#8E94A0" if is_dark else "#5A6270"
-        self._lang_title.setStyleSheet(f"color: {title_color}; font-size: 17px; font-weight: 700; background: transparent; border: none;")
-        self._lang_sub.setStyleSheet(f"color: {sub_color}; font-size: 11px; background: transparent; border: none;")
-        btn_qss = (
-            "QPushButton { background-color: #32343C; border: 1.5px solid #444752; border-radius: 12px; color: #F5F5F7; font-size: 13px; font-weight: 600; padding: 6px 14px; }"
-            "QPushButton:hover { background-color: #0A84FF; border-color: #0A84FF; color: #FFFFFF; }"
-            "QPushButton:pressed { background-color: #0066CC; }"
-        ) if is_dark else (
-            "QPushButton { background-color: #ECEFF5; border: 1.5px solid #AEB9CC; border-radius: 12px; color: #1D1D1F; font-size: 13px; font-weight: 600; padding: 6px 14px; }"
-            "QPushButton:hover { background-color: #0066CC; border-color: #0066CC; color: #FFFFFF; }"
-            "QPushButton:pressed { background-color: #004C99; }"
-        )
-        for b in self._lang_buttons:
-            b.setStyleSheet(btn_qss)
-    def _position_lang_container(self):
-        wi = max(1, self.width())
-        hi = max(1, self.height())
-        w = float(wi)
-        h = float(hi)
-        cw = min(680.0, max(500.0, w * 0.58))
-        ch = min(460.0, max(340.0, h * 0.62))
-        cx = w * 0.5
-        cy = h * 0.5
-        card_left = int(cx - cw * 0.5)
-        card_top = int(cy - ch * 0.5)
-        self._lang_container.setGeometry(card_left + 16, card_top + 16, int(cw) - 32, int(ch) - 32)
-    def _on_language_picked(self, code):
-        _save_language_to_disk(code)
-        apply_language(self._session, code)
-        self._showing_lang_selector = False
-        self._lang_container.hide()
-        self._hide_all()
-    def start_language_selection(self, session=None):
-        self._session = session
-        self._kind = "language"
-        self._showing_lang_selector = True
-        self._progress = 1.0
-        self._done_since_t = None
-        self._static_key = None
-        self._static_pixmap = None
-        self._sync_geometry()
-        self._position_lang_container()
-        self._refresh_lang_styles()
-        wi = max(1, self.width())
-        hi = max(1, self.height())
-        self._ensure_static_cache(wi, hi, get_current_mode() == "dark")
-        curt = self._ensure_curtain()
-        if curt is not None:
-            curt.sync_to_parent()
-            curt.show()
-            curt.raise_()
-        self.setWindowOpacity(1.0)
-        self.show()
-        apply_win11_rounded_corners(self)
-        self._lang_container.show()
-        self._lang_container.raise_()
-        self.raise_()
-        self.activateWindow()
-        self.repaint()
-        if not self._timer.isActive():
-            self._timer.start()
     def _hide_all(self):
         self._timer.stop()
         self._pending_callbacks.clear()
         self._last_hide_t = time.perf_counter()
-        self._showing_lang_selector = False
-        if hasattr(self, "_lang_container"):
-            self._lang_container.hide()
         if self._curtain is not None:
             try:
                 self._curtain.hide()
@@ -981,23 +931,23 @@ class MacLoadingOverlay(QtWidgets.QWidget):
             curt.sync_to_parent()
             curt.show()
             curt.raise_()
-            curt.repaint()
         self.setWindowOpacity(1.0)
         self.show()
         apply_win11_rounded_corners(self)
         self.raise_()
+        self.activateWindow()
         self.repaint()
-        QtWidgets.QApplication.sendPostedEvents(self, QtCore.QEvent.Type.Paint)
-        QtWidgets.QApplication.processEvents(QtCore.QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents, 20)
         if not self._timer.isActive():
             self._timer.start()
     def _sync_geometry(self):
         win = None
         if self._session and hasattr(self._session, "ui") and hasattr(self._session.ui, "main_window"):
             win = self._session.ui.main_window
-        if win and win.isVisible():
-            geo = win.frameGeometry().adjusted(-2, -2, 2, 2)
-            if geo.width() < 200 or geo.height() < 200:
+        if win and is_cpp_valid(win) and win.isVisible():
+            if not win.isMaximized():
+                p = win.mapToGlobal(QtCore.QPoint(0, 0))
+                geo = QtCore.QRect(p.x(), p.y(), win.width(), win.height())
+            else:
                 geo = win.geometry()
             if self.geometry() != geo:
                 self.setGeometry(geo)
@@ -1009,17 +959,7 @@ class MacLoadingOverlay(QtWidgets.QWidget):
                 ag = scr.availableGeometry()
                 if self.geometry() != ag:
                     self.setGeometry(ag)
-        if self._showing_lang_selector:
-            self._position_lang_container()
     def _on_tick(self):
-        if self._showing_lang_selector:
-            self._sync_geometry()
-            self.raise_()
-            if hasattr(self, "_lang_container") and not self._lang_container.isVisible():
-                self._lang_container.show()
-                self._lang_container.raise_()
-            self.update()
-            return
         app = QtWidgets.QApplication.instance()
         if app and (app.activeModalWidget() or app.activePopupWidget()):
             self._hide_all()
@@ -1088,19 +1028,9 @@ class MacLoadingOverlay(QtWidgets.QWidget):
                 self._progress = min(1.0, self._progress + dt * 3.2)
                 if self._progress >= 0.995:
                     self._progress = 1.0
+                    self._done_since_t = now
                     if self._kind == "startup" and _load_saved_language() is None:
-                        if not self._showing_lang_selector:
-                            self._showing_lang_selector = True
-                            self._static_key = None
-                            self._static_pixmap = None
-                            self._position_lang_container()
-                            self._refresh_lang_styles()
-                            self._lang_container.show()
-                            self._lang_container.raise_()
-                            self.update()
-                            return
-                    else:
-                        self._done_since_t = now
+                        QtCore.QTimer.singleShot(250, lambda ses=self._session: open_language_selector(ses))
             else:
                 if base_prog > self._progress:
                     self._progress = base_prog
@@ -1149,35 +1079,27 @@ class MacLoadingOverlay(QtWidgets.QWidget):
                 left = f"Estabilizando fotogramas ({fps} / {tgt} FPS)..."
                 right = f"v{_CX_VERSION} \u2022 Sincronizando {tgt} Hz..."
             else:
-                left = f"Entorno listo ({tgt} FPS)"
+                left = f"ChimeraX preparado ({tgt} FPS)"
                 right = f"v{_CX_VERSION} \u2022 {tgt} FPS estables"
         return left, right
-    def _ensure_static_cache(self, wi, hi, is_dark):
-        key = (wi, hi, is_dark)
-        if self._static_key == key and self._static_pixmap is not None:
+    def _ensure_static_cache(self, w, h, is_dark):
+        cache_key = (w, h, is_dark, self._kind)
+        if self._static_key == cache_key and self._static_pixmap is not None:
             return
-        self._static_key = key
-        w = float(wi)
-        h = float(hi)
-        pix = QtGui.QPixmap(wi, hi)
-        bg_outer = QtGui.QColor(21, 22, 25, 255) if is_dark else QtGui.QColor(228, 234, 242, 255)
-        pix.fill(bg_outer)
+        self._static_key = cache_key
+        pix = QtGui.QPixmap(w, h)
+        pix.fill(QtCore.Qt.GlobalColor.transparent)
         p = QtGui.QPainter(pix)
         p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         p.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
-        outer_border = QtGui.QPen(QtGui.QColor("#32343C") if is_dark else QtGui.QColor("#B8C3D4"))
-        outer_border.setWidthF(1.0)
-        p.setPen(outer_border)
-        p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        p.drawRect(QtCore.QRectF(0.5, 0.5, w - 1.0, h - 1.0))
-        cw = min(680.0, max(500.0, w * 0.58))
-        ch = min(460.0, max(340.0, h * 0.62))
-        cx = w * 0.5
-        cy = h * 0.5
+        wf = float(w)
+        hf = float(h)
+        cw = min(680.0, max(500.0, wf * 0.58))
+        ch = min(460.0, max(340.0, hf * 0.62))
+        cx = wf * 0.5
+        cy = hf * 0.5
         card_rect = QtCore.QRectF(cx - cw * 0.5, cy - ch * 0.5, cw, ch)
-        for i in range(6, 0, -1):
-            sp = float(i) * 2.5
-            s_alpha = int((26 if is_dark else 11) * (7 - i) / 6.0)
+        for sp, s_alpha in ((16.0, 18), (10.0, 28), (4.0, 48)):
             s_path = QtGui.QPainterPath()
             s_path.addRoundedRect(card_rect.adjusted(-sp, -sp + 3.0, sp, sp + 5.0), 14.0 + sp * 0.4, 14.0 + sp * 0.4)
             p.fillPath(s_path, QtGui.QColor(0, 0, 0, s_alpha))
@@ -1190,10 +1112,6 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         cpen.setWidthF(1.2)
         p.setPen(cpen)
         p.drawPath(card_path)
-        if self._showing_lang_selector:
-            p.end()
-            self._static_pixmap = pix
-            return
         rad = min(cw, ch) * 0.195
         tx = card_rect.left() + cw * 0.48
         ty = card_rect.top() + ch * 0.44
@@ -1250,9 +1168,6 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
         painter.drawPixmap(0, 0, self._static_pixmap)
-        if self._showing_lang_selector:
-            painter.end()
-            return
         w = float(wi)
         h = float(hi)
         cw = min(680.0, max(500.0, w * 0.58))
@@ -1270,54 +1185,64 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         ring_shadow_pen.setWidthF(rad * 0.145)
         painter.setPen(ring_shadow_pen)
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy + 3.5), rad, rad)
-        ring_pen = QtGui.QPen(QtGui.QColor("#8EBDF8"))
+        painter.drawEllipse(QtCore.QPointF(em_cx + 1.5, em_cy + 3.0), rad * 0.84, rad * 0.84)
+        ring_pen = QtGui.QPen(QtGui.QColor(10, 132, 255) if is_dark else QtGui.QColor(0, 102, 204))
         ring_pen.setWidthF(rad * 0.145)
         ring_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
         painter.setPen(ring_pen)
-        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad, rad)
-
+        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad * 0.84, rad * 0.84)
+        glow_grad = QtGui.QRadialGradient(em_cx, em_cy, rad * 0.92)
+        glow_grad.setColorAt(0.0, QtGui.QColor(10, 132, 255, 60 if is_dark else 35))
+        glow_grad.setColorAt(0.65, QtGui.QColor(10, 132, 255, 20 if is_dark else 10))
+        glow_grad.setColorAt(1.0, QtGui.QColor(10, 132, 255, 0))
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(QtGui.QBrush(glow_grad))
+        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad * 0.92, rad * 0.92)
         painter.save()
         painter.translate(em_cx, em_cy)
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.fillPath(self._swoop_path, QtGui.QColor("#5C626E") if is_dark else QtGui.QColor("#3E434C"))
-        if is_dark:
-            hi_pen = QtGui.QPen(QtGui.QColor("#E4E8F0"))
-            hi_pen.setWidthF(rad * 0.075)
-            hi_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-            painter.setPen(hi_pen)
-            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-            painter.drawPath(self._hi_swoop_path)
-        node_pt = QtCore.QPointF(-rad * 0.02, -rad * 0.04)
-        node_r = rad * 0.115 * (1.0 + 0.08 * math.sin(self._anim_phase * 2.0))
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.setBrush(QtGui.QColor("#808794") if is_dark else QtGui.QColor("#3E434C"))
-        painter.drawEllipse(node_pt, node_r, node_r)
-        painter.restore()
+        x_grad = QtGui.QLinearGradient(0, -rad * 0.8, 0, rad * 0.8)
+        x_grad.setColorAt(0.0, QtGui.QColor("#FF453A") if is_dark else QtGui.QColor("#D70015"))
+        x_grad.setColorAt(1.0, QtGui.QColor("#D70015") if is_dark else QtGui.QColor("#A60010"))
         painter.setFont(self._x_font)
-        x_rect = QtCore.QRectF(em_cx - rad * 0.10, em_cy - rad * 1.18, rad * 1.35, rad * 1.25)
-        painter.setPen(QtGui.QColor(0, 0, 0, 70 if is_dark else 42))
-        painter.drawText(x_rect.translated(2.0, 3.5), QtCore.Qt.AlignmentFlag.AlignCenter, "X")
-        painter.setPen(QtGui.QColor("#FF5E57"))
-        painter.drawText(x_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "X")
+        painter.setPen(QtGui.QColor(0, 0, 0, 60 if is_dark else 35))
+        painter.drawText(QtCore.QPointF(-rad * 0.18 + 1.2, rad * 0.42 + 2.0), "X")
+        painter.setPen(QtGui.QPen(QtGui.QBrush(x_grad), 1.0))
+        painter.drawText(QtCore.QPointF(-rad * 0.18, rad * 0.42), "X")
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(QtGui.QColor(220, 230, 242) if is_dark else QtGui.QColor(70, 75, 85))
+        painter.drawPath(self._swoop_path)
+        painter.setBrush(QtGui.QColor(255, 255, 255, 200))
+        painter.drawPath(self._hi_swoop_path)
+        ball_x = rad * 0.68
+        ball_y = rad * 0.30
+        ball_r = rad * 0.082
+        ball_shadow = QtGui.QRadialGradient(ball_x + 1.0, ball_y + 1.5, ball_r * 1.5)
+        ball_shadow.setColorAt(0.0, QtGui.QColor(0, 0, 0, 90))
+        ball_shadow.setColorAt(1.0, QtGui.QColor(0, 0, 0, 0))
+        painter.setBrush(QtGui.QBrush(ball_shadow))
+        painter.drawEllipse(QtCore.QPointF(ball_x + 1.0, ball_y + 1.5), ball_r * 1.5, ball_r * 1.5)
+        ball_grad = QtGui.QRadialGradient(ball_x - ball_r * 0.35, ball_y - ball_r * 0.35, ball_r * 1.3)
+        ball_grad.setColorAt(0.0, QtGui.QColor("#FFFFFF"))
+        ball_grad.setColorAt(0.45, QtGui.QColor("#E8EDF5") if is_dark else QtGui.QColor("#C4D2E5"))
+        ball_grad.setColorAt(1.0, QtGui.QColor("#8A9BB5") if is_dark else QtGui.QColor("#6A7C96"))
+        painter.setBrush(QtGui.QBrush(ball_grad))
+        painter.drawEllipse(QtCore.QPointF(ball_x, ball_y), ball_r, ball_r)
+        painter.restore()
         bar_margin = 44.0
         bar_x = card_left + bar_margin
         bar_w = cw - bar_margin * 2.0
         bar_y = card_bottom - 54.0
         bar_h = 7.0
-        fill_w = max(12.0, bar_w * float(self._progress))
-        fill_rect = QtCore.QRectF(bar_x, bar_y, fill_w, bar_h)
+        prog_w = max(10.0, bar_w * self._progress)
         fill_path = QtGui.QPainterPath()
-        fill_path.addRoundedRect(fill_rect, 3.5, 3.5)
-        grad = QtGui.QLinearGradient(bar_x, bar_y, bar_x + fill_w, bar_y)
-        grad.setColorAt(0.0, QtGui.QColor("#8EC5FC"))
-        grad.setColorAt(0.5, QtGui.QColor("#A0E7E5"))
-        grad.setColorAt(1.0, QtGui.QColor("#B5EAD7"))
+        fill_path.addRoundedRect(QtCore.QRectF(bar_x, bar_y, prog_w, bar_h), 3.5, 3.5)
+        fill_grad = QtGui.QLinearGradient(bar_x, 0, bar_x + prog_w, 0)
+        fill_grad.setColorAt(0.0, QtGui.QColor("#0A84FF") if is_dark else QtGui.QColor("#0066CC"))
+        fill_grad.setColorAt(1.0, QtGui.QColor("#5AC8FA") if is_dark else QtGui.QColor("#34AADC"))
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.fillPath(fill_path, QtGui.QBrush(grad))
-        shimmer_pos = (self._anim_phase * 0.45) % 1.0
-        sx = bar_x + shimmer_pos * fill_w
-        s_grad = QtGui.QLinearGradient(sx - 35.0, bar_y, sx + 35.0, bar_y)
+        painter.fillPath(fill_path, QtGui.QBrush(fill_grad))
+        shine_pos = (math.sin(self._anim_phase * 1.6) * 0.5 + 0.5) * prog_w
+        s_grad = QtGui.QLinearGradient(bar_x + shine_pos - 18.0, 0, bar_x + shine_pos + 18.0, 0)
         s_grad.setColorAt(0.0, QtGui.QColor(255, 255, 255, 0))
         s_grad.setColorAt(0.5, QtGui.QColor(255, 255, 255, 130))
         s_grad.setColorAt(1.0, QtGui.QColor(255, 255, 255, 0))
@@ -1329,24 +1254,123 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         painter.drawText(text_rect, QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter, left_msg)
         painter.drawText(text_rect, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter, right_msg)
         painter.end()
+class MacLanguageSelector(QtWidgets.QWidget):
+    def __init__(self, parent_win, session_getter=None):
+        super().__init__(parent_win)
+        self._session_getter = session_getter
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, False)
+        self.hide()
+        self._card = QtWidgets.QFrame(self)
+        self._card_layout = QtWidgets.QVBoxLayout(self._card)
+        self._card_layout.setContentsMargins(28, 24, 28, 24)
+        self._card_layout.setSpacing(14)
+        self._title = QtWidgets.QLabel(self._card)
+        self._title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._card_layout.addWidget(self._title)
+        self._sub = QtWidgets.QLabel("Choose your interface language / Elige el idioma de la interfaz", self._card)
+        self._sub.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._card_layout.addWidget(self._sub)
+        self._card_layout.addSpacing(6)
+        grid = QtWidgets.QGridLayout()
+        grid.setSpacing(12)
+        langs = [
+            ("English (US)", "en_US"),
+            ("\u4e2d\u6587 (Mandar\u00edn)", "zh_CN"),
+            ("Espa\u00f1ol (Latino)", "es_LA"),
+            ("\u0939\u093f\u0928\u094d\u0926\u0940 (Hindi)", "hi_IN"),
+            ("\u0627\u0644\u0639\u0631\u0628\u064a\u0629 (\u00c1rabe)", "ar_SA"),
+            ("Fran\u00e7ais (Franc\u00e9s)", "fr_FR"),
+        ]
+        self._buttons = []
+        for idx, (label, code) in enumerate(langs):
+            lbl_txt = label
+            if chr(92) in lbl_txt:
+                try:
+                    lbl_txt = lbl_txt.encode("utf-8").decode("unicode_escape")
+                except Exception:
+                    pass
+            btn = QtWidgets.QPushButton(lbl_txt, self._card)
+            btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(44)
+            btn.clicked.connect(lambda chk=False, c=code: self._on_pick(c))
+            grid.addWidget(btn, idx // 2, idx % 2)
+            self._buttons.append(btn)
+        self._card_layout.addLayout(grid)
+        self._card_layout.addStretch()
+        self.refresh_styles()
+    def _on_pick(self, code):
+        _save_language_to_disk(code)
+        ses = self._session_getter() if self._session_getter else None
+        apply_language(ses, code)
+        self.hide()
+    def sync_geometry(self):
+        pw = self.parentWidget()
+        if is_cpp_valid(pw):
+            r = pw.rect()
+            if self.geometry() != r:
+                self.setGeometry(r)
+            cw = min(680, max(500, int(r.width() * 0.58)))
+            ch = min(460, max(340, int(r.height() * 0.62)))
+            cx = r.width() // 2
+            cy = r.height() // 2
+            self._card.setGeometry(cx - cw // 2, cy - ch // 2, cw, ch)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.sync_geometry()
+    def refresh_styles(self):
+        is_dark = get_current_mode() == "dark"
+        card_bg = "#1F2024" if is_dark else "#F4F5F8"
+        card_border = "#383A42" if is_dark else "#D4DBE6"
+        title_color = "#F5F5F7" if is_dark else "#1D1D1F"
+        sub_color = "#8E94A0" if is_dark else "#5A6270"
+        self._card.setStyleSheet(f"QFrame {{ background-color: {card_bg}; border: 1.5px solid {card_border}; border-radius: 16px; }}")
+        lt_str = "Select Language  \u2022  Seleccionar Idioma"
+        if chr(92) in lt_str:
+            try:
+                lt_str = lt_str.encode("utf-8").decode("unicode_escape")
+            except Exception:
+                pass
+        self._title.setText(lt_str)
+        self._title.setStyleSheet(f"color: {title_color}; font-size: 17px; font-weight: 700; background: transparent; border: none;")
+        self._sub.setStyleSheet(f"color: {sub_color}; font-size: 11px; background: transparent; border: none;")
+        btn_qss_dark = "QPushButton { background-color: #32343C; border: 1.5px solid #444752; border-radius: 12px; color: #F5F5F7; font-size: 13px; font-weight: 600; padding: 6px 14px; } QPushButton:hover { background-color: #0A84FF; border-color: #0A84FF; color: #FFFFFF; } QPushButton:pressed { background-color: #0066CC; }"
+        btn_qss_light = "QPushButton { background-color: #ECEFF5; border: 1.5px solid #AEB9CC; border-radius: 12px; color: #1D1D1F; font-size: 13px; font-weight: 600; padding: 6px 14px; } QPushButton:hover { background-color: #0066CC; border-color: #0066CC; color: #FFFFFF; } QPushButton:pressed { background-color: #004C99; }"
+        btn_qss = btn_qss_dark if is_dark else btn_qss_light
+        for b in self._buttons:
+            b.setStyleSheet(btn_qss)
+    def paintEvent(self, event):
+        p = QtGui.QPainter(self)
+        is_dark = get_current_mode() == "dark"
+        bg_color = QtGui.QColor(0, 0, 0, 160) if is_dark else QtGui.QColor(220, 226, 235, 175)
+        p.fillRect(self.rect(), bg_color)
+        p.end()
+    def mousePressEvent(self, event):
+        pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        if not self._card.geometry().contains(pos):
+            self.hide()
 def open_language_selector(session=None):
     app = QtWidgets.QApplication.instance()
     if not app:
         return
-    ov = getattr(app, "_mac_loading_overlay", None)
-    if ov is None or type(ov).__name__ != "MacLoadingOverlay":
-        ov = MacLoadingOverlay()
-        app._mac_loading_overlay = ov
-    now = time.perf_counter()
-    last_click = getattr(ov, "_last_lang_click_t", 0.0)
-    if now - last_click < 0.35:
+    mw = None
+    if session and hasattr(session, "ui") and hasattr(session.ui, "main_window"):
+        mw = session.ui.main_window
+    elif hasattr(app, "activeWindow") and app.activeWindow():
+        mw = app.activeWindow()
+    if not mw or not is_cpp_valid(mw):
         return
-    ov._last_lang_click_t = now
-    if ov.isVisible() and getattr(ov, "_showing_lang_selector", False):
-        ov._showing_lang_selector = False
-        ov._hide_all()
+    selector = getattr(mw, "_mac_lang_selector", None)
+    if selector is None or not is_cpp_valid(selector):
+        selector = MacLanguageSelector(mw, session_getter=lambda: session)
+        mw._mac_lang_selector = selector
+    if selector.isVisible():
+        selector.hide()
         return
-    ov.start_language_selection(session=session)
+    selector.refresh_styles()
+    selector.sync_geometry()
+    selector.show()
+    selector.raise_()
 def show_mac_loading(session=None, kind="startup", label="", action_callback=None):
     app = QtWidgets.QApplication.instance()
     if not app:
@@ -2696,6 +2720,21 @@ def apply_mac_icons_to_all_tabs(session=None):
         if tb_filter is not None and not getattr(b, "_mac_filter_installed", False):
             b.installEventFilter(tb_filter)
             b._mac_filter_installed = True
+try:
+    from chimerax.toolbar.tool import ToolbarTool
+    if not getattr(ToolbarTool, "_mac_lang_patch_ver", 0):
+        _orig_csc = ToolbarTool._color_scheme_changed
+        def _mac_color_scheme_changed(self, *args, **kwargs):
+            _orig_csc(self, *args, **kwargs)
+            try:
+                apply_mac_icons_to_all_tabs(self.session)
+                apply_language(self.session)
+            except Exception:
+                pass
+        ToolbarTool._color_scheme_changed = _mac_color_scheme_changed
+        ToolbarTool._mac_lang_patch_ver = 1
+except Exception:
+    pass
 try:
     from chimerax.ui.widgets.tabbedtoolbar import _Section
     if not hasattr(_Section, "_mac_update_btn_patched"):
