@@ -620,10 +620,10 @@ class MacLoadingOverlay(QtWidgets.QWidget):
             self._max_duration = 2.20
             self._disappear_cooldown = 0.45
         elif kind == "theme":
-            self._appear_cooldown = 0.18
-            self._min_duration = 0.92
-            self._max_duration = 1.65
-            self._disappear_cooldown = 0.42
+            self._appear_cooldown = 0.04
+            self._min_duration = 0.28
+            self._max_duration = 0.55
+            self._disappear_cooldown = 0.08
         else:
             self._appear_cooldown = 0.16
             self._min_duration = 0.72
@@ -632,6 +632,9 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         self._sync_geometry()
         wi = max(1, self.width())
         hi = max(1, self.height())
+        if kind == "theme":
+            self._static_key = None
+            self._static_pixmap = None
         self._ensure_static_cache(wi, hi, get_current_mode() == "dark")
         curt = self._ensure_curtain()
         if curt is not None:
@@ -983,7 +986,22 @@ def show_mac_loading(session=None, kind="startup", label="", action_callback=Non
         ov = MacLoadingOverlay()
         app._mac_loading_overlay = ov
     ov.start_loading(session=session, kind=kind, label=label, action_callback=action_callback)
-_SKIP_DLG_TITLES = frozenset(("open", "save", "recent", "open dicom", "snapshot", "spin movie"))
+_SKIP_DLG_TITLES = frozenset(
+    (
+        "open",
+        "save",
+        "recent",
+        "open dicom",
+        "snapshot",
+        "spin movie",
+        "white",
+        "black",
+        "gray",
+        "white background",
+        "black background",
+        "gray background",
+    )
+)
 class MacToolbarActionFilter(QtCore.QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1004,12 +1022,41 @@ class MacToolbarActionFilter(QtCore.QObject):
                     if obj.popupMode() == QtWidgets.QToolButton.ToolButtonPopupMode.MenuButtonPopup and pos.x() >= obj.width() - 18:
                         return False
                     txt = obj.text().replace("\n", " ").strip()
-                    if txt.lower() not in _SKIP_DLG_TITLES:
+                    tip = obj.toolTip().replace("\n", " ").strip().lower()
+                    low = txt.lower()
+                    is_bg_action = any(k in low or k in tip for k in ("white", "black", "gray")) and any(
+                        k in low or k in tip for k in ("background", "bg", "white", "black")
+                    )
+                    if is_bg_action:
+                        obj.setDown(False)
+                        act = obj.defaultAction()
+                        if act is not None:
+                            act.trigger()
+                        else:
+                            obj.click()
+                        if self.session:
+                            self.session._mac_user_custom_bg = True
+                            if hasattr(self.session, "main_view") and self.session.main_view:
+                                self.session.main_view.redraw_needed = True
+                            if hasattr(self.session, "ui") and hasattr(self.session.ui, "main_window"):
+                                mw = self.session.ui.main_window
+                                if mw and hasattr(mw, "rapid_access") and mw.rapid_access:
+                                    hero = getattr(mw.rapid_access, "_mac_hero_widget", None)
+                                    if hero:
+                                        hero.update()
+                                if mw:
+                                    mw.update()
+                        return True
+                    if low not in _SKIP_DLG_TITLES:
                         obj.setDown(False)
                         def _exec_btn(b=obj):
                             try:
                                 b._mac_running_deferred = True
-                                b.click()
+                                act_inner = b.defaultAction()
+                                if act_inner is not None:
+                                    act_inner.trigger()
+                                else:
+                                    b.click()
                             finally:
                                 b._mac_running_deferred = False
                         show_mac_loading(self.session, kind="action", label=txt, action_callback=_exec_btn)
@@ -1052,8 +1099,15 @@ class MacWindowHeader(QtWidgets.QWidget):
             mb.setFixedHeight(20)
             def _on_mode_click(checked=False, m=mode_key, lt=label_text):
                 ses = self._session_getter() if self._session_getter else None
+                if ses:
+                    ses._mac_user_custom_bg = False
                 set_current_mode(m)
-                show_mac_loading(ses, kind="theme", label=lt, action_callback=lambda s=ses, md=m: apply_theme(s, mode=md))
+                show_mac_loading(
+                    ses,
+                    kind="theme",
+                    label=lt,
+                    action_callback=lambda s=ses, md=m: apply_theme(s, mode=md, force_bg=True),
+                )
             mb.clicked.connect(_on_mode_click)
             layout.addWidget(mb)
             self._mode_btns[mode_key] = mb
@@ -1841,7 +1895,7 @@ th {{
 def build_log_css(pal=None):
     return _cached_log_css(get_current_mode())
 @lru_cache(maxsize=4)
-def _cached_static_logo_uri(mode_key):
+def _cached_static_logo_image(mode_key):
     is_dark = mode_key == "dark"
     pal = _THEME_PALETTES[mode_key]
     wi, hi = 700, 300
@@ -1915,12 +1969,147 @@ def _cached_static_logo_uri(mode_key):
     p.setPen(QtGui.QColor("#F2F4F8") if is_dark else QtGui.QColor("#1D1D1F"))
     p.drawText(QtCore.QPointF(tx, ty + rad * 0.34), "Chimera X")
     p.end()
+    return img
+@lru_cache(maxsize=4)
+def _cached_static_logo_pixmap(mode_key):
+    return QtGui.QPixmap.fromImage(_cached_static_logo_image(mode_key))
+@lru_cache(maxsize=4)
+def _cached_static_logo_uri(mode_key):
+    img = _cached_static_logo_image(mode_key)
     ba = QtCore.QByteArray()
     buf = QtCore.QBuffer(ba)
     buf.open(QtCore.QIODevice.OpenModeFlag.WriteOnly)
     img.save(buf, "PNG")
     b64 = bytes(ba.toBase64()).decode("ascii")
     return f"data:image/png;base64,{b64}"
+class MacRapidAccessHero(QtWidgets.QWidget):
+    def __init__(self, parent_widget, session=None):
+        super().__init__(parent_widget)
+        self._session = session
+        self._hover_link = False
+        self._link_rect = QtCore.QRectF()
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setMouseTracking(True)
+        if parent_widget is not None:
+            parent_widget.installEventFilter(self)
+            self.setGeometry(parent_widget.rect())
+    def eventFilter(self, obj, event):
+        if obj is self.parentWidget() and event.type() == QtCore.QEvent.Type.Resize:
+            self.setGeometry(obj.rect())
+        return False
+    def sync_visibility(self):
+        p = self.parentWidget()
+        if p is not None and self.geometry() != p.rect():
+            self.setGeometry(p.rect())
+        has_files = False
+        fhw = None
+        try:
+            if self._session is not None:
+                from chimerax.core.filehistory import file_history
+                fh_obj = file_history(self._session)
+                if fh_obj and len(getattr(fh_obj, "files", ())) > 0:
+                    has_files = True
+                if hasattr(self._session, "ui") and hasattr(self._session.ui, "main_window"):
+                    mw = self._session.ui.main_window
+                    if mw and hasattr(mw, "fh") and mw.fh:
+                        fhw = getattr(mw.fh, "file_history_window", None)
+        except Exception:
+            pass
+        if has_files:
+            if self.isVisible():
+                self.hide()
+            if fhw is not None and not fhw.isVisible():
+                fhw.show()
+        else:
+            if fhw is not None and fhw.isVisible():
+                fhw.hide()
+            if not self.isVisible():
+                self.show()
+            self.raise_()
+            self.repaint()
+        self.update()
+    def _get_canvas_colors(self):
+        cur_m = get_current_mode()
+        pal = get_palette_dict(cur_m)
+        is_dark = cur_m == "dark"
+        if self._session and hasattr(self._session, "main_view") and self._session.main_view:
+            try:
+                bg = getattr(self._session.main_view, "background_color", None)
+                if bg is not None and len(bg) >= 3:
+                    r, g, b = float(bg[0]), float(bg[1]), float(bg[2])
+                    if r > 0.92 and g > 0.92 and b > 0.92:
+                        return "#FFFFFF", "#FFFFFF", "#E2E5EB", "#1D1D1F", "#0066CC", False
+                    if r < 0.08 and g < 0.08 and b < 0.08:
+                        return "#0A0A0C", "#000000", "#28292E", "#F2F4F8", "#4DA2FF", True
+            except Exception:
+                pass
+        return pal["win_bg"], pal["card_bg"], pal["border"], pal["text"], pal["accent"], is_dark
+    def mouseMoveEvent(self, event):
+        pos = event.position() if hasattr(event, "position") else QtCore.QPointF(event.pos())
+        inside = self._link_rect.contains(pos)
+        if inside != self._hover_link:
+            self._hover_link = inside
+            self.setCursor(
+                QtCore.Qt.CursorShape.PointingHandCursor
+                if inside
+                else QtCore.Qt.CursorShape.ArrowCursor
+            )
+            self.update()
+    def mouseReleaseEvent(self, event):
+        if event.button() == QtCore.Qt.MouseButton.LeftButton:
+            pos = event.position() if hasattr(event, "position") else QtCore.QPointF(event.pos())
+            if self._link_rect.contains(pos) and self._session is not None:
+                try:
+                    run(self._session, "help help:quickstart")
+                except Exception:
+                    pass
+    def contextMenuEvent(self, event):
+        try:
+            if self._session and hasattr(self._session, "ui") and hasattr(self._session.ui, "main_window"):
+                mw = self._session.ui.main_window
+                if mw and hasattr(mw, "fh") and mw.fh and hasattr(mw.fh, "file_history_window"):
+                    mw.fh.file_history_window.contextMenuEvent(event)
+                    return
+        except Exception:
+            pass
+    def paintEvent(self, event):
+        win_col, card_col, border_col, text_col, accent_col, is_card_dark = self._get_canvas_colors()
+        w = float(max(1, self.width()))
+        h = float(max(1, self.height()))
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.fillRect(self.rect(), QtGui.QColor(win_col))
+        card_rect = QtCore.QRectF(8.0, 3.0, max(10.0, w - 12.0), max(10.0, h - 7.0))
+        card_path = QtGui.QPainterPath()
+        card_path.addRoundedRect(card_rect, 16.0, 16.0)
+        painter.fillPath(card_path, QtGui.QColor(card_col))
+        b_pen = QtGui.QPen(QtGui.QColor(border_col))
+        b_pen.setWidthF(1.5)
+        painter.setPen(b_pen)
+        painter.drawPath(card_path)
+        logo_key = "dark" if is_card_dark else "gray"
+        pix = _cached_static_logo_pixmap(logo_key)
+        pw = float(pix.width())
+        ph = float(pix.height())
+        target_w = min(540.0, max(280.0, w * 0.56))
+        target_h = target_w * (ph / pw)
+        lx = w * 0.5 - target_w * 0.5
+        ly = h * 0.42 - target_h * 0.5
+        painter.drawPixmap(QtCore.QRectF(lx, ly, target_w, target_h), pix, QtCore.QRectF(0.0, 0.0, pw, ph))
+        link_font = QtGui.QFont("Segoe UI", 14)
+        link_font.setWeight(QtGui.QFont.Weight.Medium)
+        link_font.setUnderline(self._hover_link)
+        painter.setFont(link_font)
+        painter.setPen(QtGui.QColor(accent_col))
+        fm = QtGui.QFontMetricsF(link_font)
+        txt = "Get started"
+        tw = fm.horizontalAdvance(txt)
+        th = fm.height()
+        self._link_rect = QtCore.QRectF(w * 0.5 - tw * 0.5 - 12.0, h * 0.64 - th * 0.5 - 6.0, tw + 24.0, th + 12.0)
+        painter.drawText(self._link_rect, QtCore.Qt.AlignmentFlag.AlignCenter, txt)
+        painter.end()
 @lru_cache(maxsize=4)
 def _cached_no_hist_html(mode_key):
     pal = _THEME_PALETTES[mode_key]
@@ -2062,7 +2251,7 @@ except Exception:
     pass
 try:
     from chimerax.ui.file_history import FileHistory
-    if getattr(FileHistory, "_mac_patch_ver", 0) != 3:
+    if getattr(FileHistory, "_mac_patch_ver", 0) != 4:
         _orig_fh_history_html = getattr(FileHistory, "_orig_mac_history_html", FileHistory.history_html)
         FileHistory._orig_mac_history_html = _orig_fh_history_html
         def _mac_fh_history_html(self):
@@ -2085,12 +2274,40 @@ try:
                 if fhw and fhw.page():
                     r, g, b = pal["qcolor_bg"]
                     fhw.page().setBackgroundColor(QtGui.QColor(r, g, b))
+                if hasattr(self, "session") and self.session and hasattr(self.session, "ui"):
+                    mw = getattr(self.session.ui, "main_window", None)
+                    if mw and hasattr(mw, "rapid_access") and mw.rapid_access:
+                        hero = getattr(mw.rapid_access, "_mac_hero_widget", None)
+                        if hero is not None and hasattr(hero, "sync_visibility"):
+                            hero.sync_visibility()
             except Exception:
                 pass
         FileHistory.update_html = _mac_fh_update_html
-        FileHistory._mac_patch_ver = 3
+        FileHistory._mac_patch_ver = 4
 except Exception:
     pass
+def install_rapid_access_hero(session=None):
+    if not session or not hasattr(session, "ui") or not hasattr(session.ui, "main_window"):
+        return
+    win = session.ui.main_window
+    if not win or not hasattr(win, "rapid_access") or not win.rapid_access:
+        return
+    ra = win.rapid_access
+    hero = getattr(ra, "_mac_hero_widget", None)
+    if hero is None or type(hero).__name__ != "MacRapidAccessHero":
+        if hero is not None:
+            try:
+                hero.hide()
+                hero.deleteLater()
+            except Exception:
+                pass
+        hero = MacRapidAccessHero(ra, session=session)
+        ra._mac_hero_widget = hero
+        lay = ra.layout()
+        if isinstance(lay, QtWidgets.QGridLayout):
+            lay.addWidget(hero, 0, 0)
+    hero._session = session
+    hero.sync_visibility()
 def apply_light_to_all_html_views(session=None):
     if not session or not hasattr(session, "ui") or not hasattr(session.ui, "main_window"):
         return
@@ -2102,6 +2319,7 @@ def apply_light_to_all_html_views(session=None):
     r, g, b = pal["qcolor_bg"]
     bg_qcol = QtGui.QColor(r, g, b)
     js_code = build_log_js()
+    install_rapid_access_hero(session)
     if hasattr(win, "fh") and win.fh:
         try:
             fh = win.fh
@@ -2121,30 +2339,20 @@ def apply_light_to_all_html_views(session=None):
                         pass
                 fhw.loadFinished.connect(_on_fhw_loaded)
                 fhw._mac_load_hooked = True
-            if getattr(fh, "_mac_fh_mode", None) != (cur_mode, 3):
-                fh._mac_fh_mode = (cur_mode, 3)
-                fh.update_html()
         except Exception:
             pass
     from chimerax.ui.widgets.htmlview import HtmlView
-    if hasattr(session, "logger") and hasattr(session.logger, "logs"):
-        for lg in session.logger.logs:
-            if hasattr(lg, "_actually_show") and getattr(lg, "_mac_shown_mode", None) != cur_mode:
-                try:
-                    lg._actually_show()
-                    lg._mac_shown_mode = cur_mode
-                except Exception:
-                    pass
     for hv in win.findChildren(HtmlView):
         page = hv.page()
         if page:
             page.setBackgroundColor(bg_qcol)
             page.runJavaScript(js_code)
-def configure_3d_canvas(session, recolor=False):
+def configure_3d_canvas(session, recolor=False, force=False):
     if session:
         try:
             pal = get_palette_dict()
-            run(session, f"set bg {pal['viewport_bg']}", log=False)
+            if force or not getattr(session, "_mac_user_custom_bg", False):
+                run(session, f"set bg {pal['viewport_bg']}", log=False)
             run(session, "lighting soft", log=False)
             run(session, f"graphics silhouettes true color {pal['silhouette_color']} width 1.2", log=False)
             if recolor:
@@ -2414,9 +2622,11 @@ def _deferred_theme_sync(session=None):
     apply_light_to_all_html_views(session)
     apply_light_to_sideview_and_sequences(session)
     install_viewport_rounded_frame(session)
-def apply_theme(session=None, mode=None):
+def apply_theme(session=None, mode=None, force_bg=True):
     global _CURRENT_MODE
     set_current_mode(mode if mode is not None else get_current_mode())
+    if session and force_bg:
+        session._mac_user_custom_bg = False
     pal = get_palette_dict(_CURRENT_MODE)
     app = QtWidgets.QApplication.instance()
     if not app:
@@ -2460,6 +2670,7 @@ def apply_theme(session=None, mode=None):
     if session and hasattr(session, "ui") and session.ui:
         ui = session.ui
         is_dark = pal["scheme"] == "dark"
+        ui._color_scheme_changed = lambda *a, **kw: None
         ui.color_scheme = pal["scheme"]
         try:
             ui.styleHints().setColorScheme(
@@ -2483,8 +2694,16 @@ def apply_theme(session=None, mode=None):
     apply_mac_icons_to_all_tabs(session)
     apply_light_to_all_html_views(session)
     apply_light_to_sideview_and_sequences(session)
-    configure_3d_canvas(session, recolor=False)
+    configure_3d_canvas(session, recolor=False, force=force_bg)
     install_viewport_rounded_frame(session)
+    if session and hasattr(session, "ui") and hasattr(session.ui, "main_window"):
+        mw = session.ui.main_window
+        if mw and hasattr(mw, "rapid_access") and mw.rapid_access:
+            hero = getattr(mw.rapid_access, "_mac_hero_widget", None)
+            if hero:
+                hero.update()
+        if mw:
+            mw.update()
     QtCore.QTimer.singleShot(160, lambda: _deferred_theme_sync(session))
     if not getattr(app, "_mac_tabs_hooked", False):
         for tw in app.findChildren(QtWidgets.QTabWidget):
@@ -2496,7 +2715,7 @@ def apply_theme(session=None, mode=None):
     if session and hasattr(session, "triggers") and not getattr(session, "_mac_triggers_added", False):
         def on_session_restored(*args):
             def _sync_after_restore():
-                configure_3d_canvas(session, recolor=False)
+                configure_3d_canvas(session, recolor=False, force=False)
                 _deferred_theme_sync(session)
             show_mac_loading(session, kind="action", label="Modelo 3D", action_callback=_sync_after_restore)
         for _trig_name in ("end restore session", "session open", "open models", "add models"):
