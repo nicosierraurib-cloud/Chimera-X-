@@ -208,13 +208,24 @@ def apply_language(session=None, lang_code=None):
             except Exception:
                 mb = None
         if mb and is_cpp_valid(mb):
-            for act in mb.actions():
-                orig_m = _ORIG_ACTION_TITLES.setdefault(id(act), act.text())
+            canonical_menus = {0: "File", 1: "Edit", 2: "Select", 3: "Actions", 4: "Tools", 5: "Favorites", 6: "Presets", 7: "Help"}
+            for idx, act in enumerate(mb.actions()):
+                orig_m = canonical_menus.get(idx)
+                if not orig_m:
+                    orig_m = act.property("_mac_orig_title")
+                    if not orig_m:
+                        orig_m = _clean_key(act.text())
+                        act.setProperty("_mac_orig_title", orig_m)
+                else:
+                    act.setProperty("_mac_orig_title", orig_m)
                 act.setText(_tr(orig_m, cur_lang))
                 menu = act.menu()
                 if menu:
                     for sub_act in menu.actions():
-                        orig_sm = _ORIG_ACTION_TITLES.setdefault(id(sub_act), sub_act.text())
+                        orig_sm = sub_act.property("_mac_orig_title")
+                        if not orig_sm:
+                            orig_sm = _clean_key(sub_act.text())
+                            sub_act.setProperty("_mac_orig_title", orig_sm)
                         sub_act.setText(_tr(orig_sm, cur_lang))
         hdr = getattr(mw, "_mac_header_widget", None)
         if is_cpp_valid(hdr) and hasattr(hdr, "refresh_theme"):
@@ -727,13 +738,9 @@ class MacInternalCurtain(QtWidgets.QWidget):
             self.raise_()
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
-        ov = self._overlay_ref
-        if ov is not None and ov._static_pixmap is not None and not ov._static_pixmap.isNull():
-            painter.drawPixmap(0, 0, ov._static_pixmap)
-        else:
-            is_dark = get_current_mode() == "dark"
-            bg = QtGui.QColor(21, 22, 25, 255) if is_dark else QtGui.QColor(228, 234, 242, 255)
-            painter.fillRect(self.rect(), bg)
+        is_dark = get_current_mode() == "dark"
+        bg = QtGui.QColor(21, 22, 25, 230) if is_dark else QtGui.QColor(228, 234, 242, 230)
+        painter.fillRect(self.rect(), bg)
         painter.end()
 class MacLoadingOverlay(QtWidgets.QWidget):
     def __init__(self):
@@ -894,6 +901,7 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         self._lang_container.show()
         self._lang_container.raise_()
         self.raise_()
+        self.activateWindow()
         self.repaint()
         if not self._timer.isActive():
             self._timer.start()
@@ -1006,6 +1014,10 @@ class MacLoadingOverlay(QtWidgets.QWidget):
     def _on_tick(self):
         if self._showing_lang_selector:
             self._sync_geometry()
+            self.raise_()
+            if hasattr(self, "_lang_container") and not self._lang_container.isVisible():
+                self._lang_container.show()
+                self._lang_container.raise_()
             self.update()
             return
         app = QtWidgets.QApplication.instance()
@@ -1325,6 +1337,11 @@ def open_language_selector(session=None):
     if ov is None or type(ov).__name__ != "MacLoadingOverlay":
         ov = MacLoadingOverlay()
         app._mac_loading_overlay = ov
+    now = time.perf_counter()
+    last_click = getattr(ov, "_last_lang_click_t", 0.0)
+    if now - last_click < 0.35:
+        return
+    ov._last_lang_click_t = now
     if ov.isVisible() and getattr(ov, "_showing_lang_selector", False):
         ov._showing_lang_selector = False
         ov._hide_all()
@@ -1505,11 +1522,11 @@ class MacWindowHeader(QtWidgets.QWidget):
                 self.title_lbl.setStyleSheet(f"color: {pal['text']}; font-size: 13px; font-weight: 600; background: transparent; border: none;")
             cur_m = get_current_mode()
             cur_lang = get_current_language()
-            for m_key, btn in getattr(self, "_mode_btns", {}).items():
+            for m_key, canonical_title in (("light", "Light"), ("gray", "Gray"), ("dark", "Dark")):
+                btn = getattr(self, "_mode_btns", {}).get(m_key)
                 if not is_cpp_valid(btn):
                     continue
-                raw_text = "Claro" if m_key == "light" else ("Gris" if m_key == "gray" else "Oscuro")
-                btn.setText(_tr(raw_text, cur_lang))
+                btn.setText(_tr(canonical_title, cur_lang))
                 if m_key == cur_m:
                     btn.setStyleSheet(
                         f"QPushButton {{ background-color: {pal['accent']}; color: #FFFFFF; border: none; border-radius: 9px; padding: 1px 10px; font-size: 10px; font-weight: 600; }}"
@@ -1520,7 +1537,7 @@ class MacWindowHeader(QtWidgets.QWidget):
                         f"QPushButton:hover {{ background-color: {pal['btn_hover']}; }}"
                     )
             if hasattr(self, "_btn_lang") and is_cpp_valid(self._btn_lang):
-                self._btn_lang.setText(_tr("Idioma", cur_lang))
+                self._btn_lang.setText(_tr("Language", cur_lang))
                 self._btn_lang.setStyleSheet(
                     f"QPushButton {{ background-color: {pal['btn_bg']}; color: {pal['text']}; border: 1px solid {pal['border']}; border-radius: 9px; padding: 1px 8px; font-size: 10px; font-weight: 500; }}"
                     f"QPushButton:hover {{ background-color: {pal['btn_hover']}; }}"
@@ -2660,11 +2677,8 @@ def apply_mac_icons_to_all_tabs(session=None):
                         bi.icon = cached_icon
                         bi.highlight_icon = None
                         modified = True
-            if modified and hasattr(section, "_redo_layout"):
-                try:
-                    section._redo_layout()
-                except Exception:
-                    pass
+            if modified:
+                pass
     app = QtWidgets.QApplication.instance()
     tb_filter = getattr(app, "_mac_tb_action_filter", None) if app else None
     if app and (tb_filter is None or type(tb_filter).__name__ != "MacToolbarActionFilter"):
@@ -3092,6 +3106,7 @@ def _deferred_theme_sync(session=None):
     apply_light_to_all_html_views(session)
     apply_light_to_sideview_and_sequences(session)
     install_viewport_rounded_frame(session)
+    apply_language(session)
 def apply_theme(session=None, mode=None, force_bg=True):
     global _CURRENT_MODE
     set_current_mode(mode if mode is not None else get_current_mode())
@@ -3175,7 +3190,9 @@ def apply_theme(session=None, mode=None, force_bg=True):
                 hero.update()
         if mw:
             mw.update()
+    QtCore.QTimer.singleShot(60, lambda: apply_language(session))
     QtCore.QTimer.singleShot(160, lambda: _deferred_theme_sync(session))
+    QtCore.QTimer.singleShot(320, lambda: apply_language(session))
     if not getattr(app, "_mac_tabs_hooked", False):
         for tw in app.findChildren(QtWidgets.QTabWidget):
             try:
