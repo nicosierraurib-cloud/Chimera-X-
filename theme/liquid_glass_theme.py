@@ -1840,13 +1840,116 @@ th {{
 """
 def build_log_css(pal=None):
     return _cached_log_css(get_current_mode())
+@lru_cache(maxsize=4)
+def _cached_static_logo_uri(mode_key):
+    is_dark = mode_key == "dark"
+    pal = _THEME_PALETTES[mode_key]
+    wi, hi = 700, 300
+    img = QtGui.QImage(wi, hi, QtGui.QImage.Format.Format_ARGB32_Premultiplied)
+    img.fill(QtGui.QColor(pal["card_bg"]))
+    p = QtGui.QPainter(img)
+    p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+    p.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
+    rad = 96.0
+    em_cx = 207.0
+    em_cy = 152.0
+    tx = 339.0
+    ty = 147.0
+    ring_shadow_pen = QtGui.QPen(QtGui.QColor(0, 0, 0, 55 if is_dark else 28))
+    ring_shadow_pen.setWidthF(rad * 0.145)
+    p.setPen(ring_shadow_pen)
+    p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    p.drawEllipse(QtCore.QPointF(em_cx, em_cy + 3.5), rad, rad)
+    ring_pen = QtGui.QPen(QtGui.QColor("#8EBDF8"))
+    ring_pen.setWidthF(rad * 0.145)
+    ring_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+    p.setPen(ring_pen)
+    p.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad, rad)
+    swoop = QtGui.QPainterPath()
+    swoop.moveTo(rad * 0.68, rad * 0.30)
+    swoop.cubicTo(rad * 0.05, -rad * 0.25, -rad * 0.85, -rad * 0.32, -rad * 0.66, rad * 0.08)
+    swoop.cubicTo(-rad * 0.45, rad * 0.48, rad * 0.25, rad * 0.85, rad * 0.78, rad * 1.06)
+    swoop.cubicTo(rad * 0.58, rad * 0.86, -rad * 0.22, rad * 0.36, -rad * 0.38, rad * 0.02)
+    swoop.cubicTo(-rad * 0.50, -rad * 0.18, rad * 0.08, -rad * 0.08, rad * 0.62, rad * 0.38)
+    swoop.closeSubpath()
+    hi_swoop = QtGui.QPainterPath()
+    hi_swoop.moveTo(rad * 0.58, rad * 0.34)
+    hi_swoop.cubicTo(rad * 0.02, -rad * 0.14, -rad * 0.55, -rad * 0.18, -rad * 0.42, rad * 0.08)
+    hi_swoop.cubicTo(-rad * 0.26, rad * 0.38, rad * 0.22, rad * 0.72, rad * 0.56, rad * 0.88)
+    p.save()
+    p.translate(em_cx, em_cy)
+    p.setPen(QtCore.Qt.PenStyle.NoPen)
+    p.fillPath(swoop, QtGui.QColor("#5C626E") if is_dark else QtGui.QColor("#464C58"))
+    hi_pen = QtGui.QPen(QtGui.QColor("#E4E8F0") if is_dark else QtGui.QColor("#F4F6FA"))
+    hi_pen.setWidthF(rad * 0.075)
+    hi_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+    p.setPen(hi_pen)
+    p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    p.drawPath(hi_swoop)
+    node_pt = QtCore.QPointF(-rad * 0.02, -rad * 0.04)
+    node_r = rad * 0.115
+    p.setPen(QtCore.Qt.PenStyle.NoPen)
+    p.setBrush(QtGui.QColor("#808794") if is_dark else QtGui.QColor("#68707E"))
+    p.drawEllipse(node_pt, node_r, node_r)
+    p.restore()
+    xf = QtGui.QFont("Times New Roman", int(rad * 1.05))
+    xf.setBold(True)
+    xf.setItalic(True)
+    p.setFont(xf)
+    x_rect = QtCore.QRectF(em_cx - rad * 0.10, em_cy - rad * 1.18, rad * 1.35, rad * 1.25)
+    p.setPen(QtGui.QColor(0, 0, 0, 70 if is_dark else 42))
+    p.drawText(x_rect.translated(2.0, 3.5), QtCore.Qt.AlignmentFlag.AlignCenter, "X")
+    p.setPen(QtGui.QColor("#FF5E57"))
+    p.drawText(x_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "X")
+    uc_font = QtGui.QFont("Segoe UI", int(rad * 0.24))
+    uc_font.setWeight(QtGui.QFont.Weight.Black)
+    p.setFont(uc_font)
+    p.setPen(QtGui.QColor("#AEB4C0") if is_dark else QtGui.QColor("#363A42"))
+    fm_uc = QtGui.QFontMetricsF(uc_font)
+    p.drawText(QtCore.QPointF(tx, ty - rad * 0.24), "UC")
+    uc_w = fm_uc.horizontalAdvance("UC")
+    p.drawText(QtCore.QPointF(tx + uc_w - 1.0, ty - rad * 0.14), "SF")
+    cx_font = QtGui.QFont("Segoe UI", int(rad * 0.43))
+    cx_font.setWeight(QtGui.QFont.Weight.Bold)
+    p.setFont(cx_font)
+    p.setPen(QtGui.QColor("#F2F4F8") if is_dark else QtGui.QColor("#1D1D1F"))
+    p.drawText(QtCore.QPointF(tx, ty + rad * 0.34), "Chimera X")
+    p.end()
+    ba = QtCore.QByteArray()
+    buf = QtCore.QBuffer(ba)
+    buf.open(QtCore.QIODevice.OpenModeFlag.WriteOnly)
+    img.save(buf, "PNG")
+    b64 = bytes(ba.toBase64()).decode("ascii")
+    return f"data:image/png;base64,{b64}"
+@lru_cache(maxsize=4)
+def _cached_no_hist_html(mode_key):
+    pal = _THEME_PALETTES[mode_key]
+    logo_uri = _cached_static_logo_uri(mode_key)
+    return (
+        f"<style>"
+        f"html, body {{ background-color: {pal['card_bg']} !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }}"
+        f".banner-text {{ position: absolute !important; top: 43% !important; left: 50% !important; transform: translate(-50%, -50%) !important; margin: 0 !important; padding: 0 !important; text-shadow: none !important; }}"
+        f"#_mac_cx_logo_img {{ width: min(540px, 64vw) !important; height: auto !important; display: block !important; user-select: none !important; -webkit-user-drag: none !important; }}"
+        f".help-link {{ font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif !important; font-size: clamp(16px, 1.8vw, 24px) !important; font-weight: 500 !important; position: absolute !important; top: 64% !important; left: 50% !important; transform: translate(-50%, -50%) !important; margin: 0 !important; }}"
+        f".help-link a {{ color: {pal['accent']} !important; text-decoration: none !important; }}"
+        f".help-link a:hover {{ text-decoration: underline !important; }}"
+        f"</style>"
+        f'<p class="banner-text"><img id="_mac_cx_logo_img" src="{logo_uri}" alt="UCSF Chimera X" draggable="false"></p>'
+        f'<p class="help-link"><a href="cxcmd:help help:quickstart">Get started</a></p>'
+    )
 @lru_cache(maxsize=8)
 def _cached_log_js(mode_key):
     pal = _THEME_PALETTES[mode_key]
+    logo_uri = _cached_static_logo_uri(mode_key)
     css_one_line = (
         f'html, body {{ background-color: {pal["card_bg"]} !important; color: {pal["text"]} !important; '
         f'font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", sans-serif !important; font-size: 12px !important; }} '
         f'a {{ color: {pal["accent"]} !important; text-decoration: none !important; }} '
+        f'a:hover {{ text-decoration: underline !important; }} '
+        f'.banner-text {{ position: absolute !important; top: 43% !important; left: 50% !important; transform: translate(-50%, -50%) !important; margin: 0 !important; padding: 0 !important; text-shadow: none !important; }} '
+        f'#_mac_cx_logo_img {{ width: min(540px, 64vw) !important; height: auto !important; display: block !important; user-select: none !important; -webkit-user-drag: none !important; }} '
+        f'.help-link {{ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif !important; font-size: clamp(16px, 1.8vw, 24px) !important; font-weight: 500 !important; position: absolute !important; top: 64% !important; left: 50% !important; transform: translate(-50%, -50%) !important; margin: 0 !important; }} '
+        f'.help-link a {{ color: {pal["accent"]} !important; text-decoration: none !important; }} '
         f'pre, code, .cxcmd {{ background-color: {pal["code_bg"]} !important; color: {pal["text"]} !important; '
         f'border: 1px solid {pal["border_soft"]} !important; border-left: 3.5px solid {pal["sep_color"]} !important; '
         f'border-radius: 9px !important; padding: 5px 10px !important; font-family: "SF Mono", Menlo, Consolas, monospace !important; }} '
@@ -1865,6 +1968,16 @@ def _cached_log_js(mode_key):
     }}
     if (style) {{
         style.innerHTML = '{css_one_line}';
+    }}
+    var banner = document.querySelector('.banner-text');
+    if (banner) {{
+        var logoUri = '{logo_uri}';
+        var img = document.getElementById('_mac_cx_logo_img');
+        if (!img) {{
+            banner.innerHTML = '<img id="_mac_cx_logo_img" src="' + logoUri + '" alt="UCSF Chimera X" draggable="false">';
+        }} else if (img.getAttribute('src') !== logoUri) {{
+            img.setAttribute('src', logoUri);
+        }}
     }}
 }})();
 """
@@ -1947,6 +2060,37 @@ try:
         Log._mac_patch_ver = 2
 except Exception:
     pass
+try:
+    from chimerax.ui.file_history import FileHistory
+    if getattr(FileHistory, "_mac_patch_ver", 0) != 3:
+        _orig_fh_history_html = getattr(FileHistory, "_orig_mac_history_html", FileHistory.history_html)
+        FileHistory._orig_mac_history_html = _orig_fh_history_html
+        def _mac_fh_history_html(self):
+            cur_m = get_current_mode()
+            pal = get_palette_dict(cur_m)
+            self.bg_color = pal["card_bg"]
+            self.no_hist_text = _cached_no_hist_html(cur_m)
+            return _orig_fh_history_html(self)
+        FileHistory.history_html = _mac_fh_history_html
+        _orig_fh_update_html = getattr(FileHistory, "_orig_mac_update_html", FileHistory.update_html)
+        FileHistory._orig_mac_update_html = _orig_fh_update_html
+        def _mac_fh_update_html(self):
+            cur_m = get_current_mode()
+            pal = get_palette_dict(cur_m)
+            self.bg_color = pal["card_bg"]
+            self.no_hist_text = _cached_no_hist_html(cur_m)
+            _orig_fh_update_html(self)
+            try:
+                fhw = getattr(self, "file_history_window", None)
+                if fhw and fhw.page():
+                    r, g, b = pal["qcolor_bg"]
+                    fhw.page().setBackgroundColor(QtGui.QColor(r, g, b))
+            except Exception:
+                pass
+        FileHistory.update_html = _mac_fh_update_html
+        FileHistory._mac_patch_ver = 3
+except Exception:
+    pass
 def apply_light_to_all_html_views(session=None):
     if not session or not hasattr(session, "ui") or not hasattr(session.ui, "main_window"):
         return
@@ -1958,6 +2102,30 @@ def apply_light_to_all_html_views(session=None):
     r, g, b = pal["qcolor_bg"]
     bg_qcol = QtGui.QColor(r, g, b)
     js_code = build_log_js()
+    if hasattr(win, "fh") and win.fh:
+        try:
+            fh = win.fh
+            fh.bg_color = pal["card_bg"]
+            fh.no_hist_text = _cached_no_hist_html(cur_mode)
+            fhw = getattr(fh, "file_history_window", None)
+            if fhw and not getattr(fhw, "_mac_load_hooked", False):
+                def _on_fhw_loaded(ok, v=fhw):
+                    try:
+                        p = v.page()
+                        if p:
+                            c_pal = get_palette_dict()
+                            cr, cg, cb = c_pal["qcolor_bg"]
+                            p.setBackgroundColor(QtGui.QColor(cr, cg, cb))
+                            p.runJavaScript(build_log_js())
+                    except Exception:
+                        pass
+                fhw.loadFinished.connect(_on_fhw_loaded)
+                fhw._mac_load_hooked = True
+            if getattr(fh, "_mac_fh_mode", None) != (cur_mode, 3):
+                fh._mac_fh_mode = (cur_mode, 3)
+                fh.update_html()
+        except Exception:
+            pass
     from chimerax.ui.widgets.htmlview import HtmlView
     if hasattr(session, "logger") and hasattr(session.logger, "logs"):
         for lg in session.logger.logs:
@@ -2401,7 +2569,7 @@ def liquidglass_cmd(session, mode=None):
     else:
         reload_theme_from_disk(session, mode=mode)
 try:
-    cmd_desc = CmdDesc(optional=[("mode", StringArg)])
+    cmd_desc = CmdDesc(optional=[("mode", StringArg)], synopsis="Theme")
     register("liquidglass", cmd_desc, liquidglass_cmd)
 except Exception:
     pass
