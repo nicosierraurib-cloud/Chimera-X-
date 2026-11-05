@@ -26,6 +26,28 @@ try:
 except Exception:
     pass
 _MODE_STATE_FILE = os.path.join(os.path.expanduser("~/chimerax_start"), "theme_mode.txt")
+_LANG_STATE_FILE = os.path.join(os.path.expanduser("~/chimerax_start"), "language.txt")
+def _detect_system_theme():
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+        val, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+        winreg.CloseKey(key)
+        if val == 0:
+            return "dark"
+        return "gray"
+    except Exception:
+        pass
+    try:
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            hints = app.styleHints()
+            if hasattr(hints, "colorScheme"):
+                if hints.colorScheme() == QtCore.Qt.ColorScheme.Dark:
+                    return "dark"
+    except Exception:
+        pass
+    return "gray"
 def _load_saved_mode():
     try:
         if os.path.exists(_MODE_STATE_FILE):
@@ -37,7 +59,7 @@ def _load_saved_mode():
                 return "gray"
     except Exception:
         pass
-    return "gray"
+    return _detect_system_theme()
 def _save_mode_to_disk(mode_str):
     try:
         os.makedirs(os.path.dirname(_MODE_STATE_FILE), exist_ok=True)
@@ -46,6 +68,130 @@ def _save_mode_to_disk(mode_str):
     except Exception:
         pass
 _CURRENT_MODE = globals().get("_CURRENT_MODE") or _load_saved_mode()
+def _load_saved_language():
+    try:
+        if os.path.exists(_LANG_STATE_FILE):
+            with open(_LANG_STATE_FILE, "r", encoding="utf-8") as f:
+                val = f.read().strip()
+            if val in ("en_US", "zh_CN", "es_LA", "hi_IN", "ar_SA", "fr_FR"):
+                return val
+    except Exception:
+        pass
+    return None
+def _save_language_to_disk(lang_code):
+    try:
+        os.makedirs(os.path.dirname(_LANG_STATE_FILE), exist_ok=True)
+        with open(_LANG_STATE_FILE, "w", encoding="utf-8") as f:
+            f.write(lang_code)
+    except Exception:
+        pass
+_CURRENT_LANG = _load_saved_language() or "en_US"
+def get_current_language():
+    global _CURRENT_LANG
+    return _CURRENT_LANG
+_TRANSLATION_TABLE = {'Home': {'en_US': 'Home', 'zh_CN': '\\u4e3b\\u9875', 'es_LA': 'Inicio', 'hi_IN': '\\u0939\\u094b\\u092e', 'ar_SA': '\\u0627\\u0644\\u0631\\u0626\\u064a\\u0633\\u064a\\u0629', 'fr_FR': 'Accueil'}, 'Graphics': {'en_US': 'Graphics', 'zh_CN': '\\u56fe\\u5f62', 'es_LA': 'Gr\\u00e1ficos', 'hi_IN': '\\u0917\\u094d\\u0930\\u093e\\u092b\\u093c\\u093f\\u0915\\u094d\\u0938', 'ar_SA': '\\u0627\\u0644\\u0631\\u0633\\u0648\\u0645\\u0627\\u062a', 'fr_FR': 'Graphiques'}, 'Map': {'en_US': 'Map', 'zh_CN': '\\u5bc6\\u5ea6\\u56fe', 'es_LA': 'Mapa', 'hi_IN': '\\u092e\\u093e\\u0928\\u091a\\u093f\\u0924\\u094d\\u0930', 'ar_SA': '\\u062e\\u0631\\u064a\\u0637\\u0629', 'fr_FR': 'Carte'}, 'Markers': {'en_US': 'Markers', 'zh_CN': '\\u6807\\u8bb0', 'es_LA': 'Marcadores', 'hi_IN': '\\u092e\\u093e\\u0930\\u094d\\u0915\\u0930', 'ar_SA': '\\u0639\\u0644\\u0627\\u0645\\u0627\\u062a', 'fr_FR': 'Marqueurs'}, 'Medical Image': {'en_US': 'Medical Image', 'zh_CN': '\\u533b\\u5b66\\u56fe\\u50cf', 'es_LA': 'Imagen M\\u00e9dica', 'hi_IN': '\\u091a\\u093f\\u0915\\u093f\\u0924\\u094d\\u0938\\u093e \\u091b\\u0935\\u093f', 'ar_SA': '\\u0635\\u0648\\u0631\\u0629 \\u0637\\u0628\\u064a\\u0629', 'fr_FR': 'Imagerie M\\u00e9dicale'}, 'Molecule Display': {'en_US': 'Molecule Display', 'zh_CN': '\\u5206\\u5b50\\u663e\\u793a', 'es_LA': 'Vista Molecular', 'hi_IN': '\\u0905\\u0923\\u0941 \\u092a\\u094d\\u0930\\u0926\\u0930\\u094d\\u0936\\u0928', 'ar_SA': '\\u0639\\u0631\\u0636 \\u0627\\u0644\\u062c\\u0632\\u064a\\u0621', 'fr_FR': 'Affichage Mol\\u00e9cule'}, 'Nucleotides': {'en_US': 'Nucleotides', 'zh_CN': '\\u6838\\u82f7\\u9178', 'es_LA': 'Nucle\\u00f3tidos', 'hi_IN': '\\u0928\\u094d\\u092f\\u0942\\u0915\\u094d\\u0932\\u093f\\u092f\\u094b\\u091f\\u093e\\u0907\\u0921', 'ar_SA': '\\u0627\\u0644\\u0646\\u0648\\u0643\\u0644\\u064a\\u0648\\u062a\\u064a\\u062f\\u0627\\u062a', 'fr_FR': 'Nucl\\u00e9otides'}, 'Right Mouse': {'en_US': 'Right Mouse', 'zh_CN': '\\u9f20\\u6807\\u53f3\\u952e', 'es_LA': 'Bot\\u00f3n Derecho', 'hi_IN': '\\u0926\\u093e\\u092f\\u093e\\u0902 \\u092e\\u093e\\u0909\\u0938', 'ar_SA': '\\u0627\\u0644\\u0632\\u0631 \\u0627\\u0644\\u0623\\u064a\\u0645\\u0646', 'fr_FR': 'Souris Droite'}, 'Favorites': {'en_US': 'Favorites', 'zh_CN': '\\u6536\\u85cf\\u5939', 'es_LA': 'Favoritos', 'hi_IN': '\\u092a\\u0938\\u0902\\u0926\\u0940\\u0926\\u093e', 'ar_SA': '\\u0627\\u0644\\u0645\\u0641\\u0636\\u0644\\u0629', 'fr_FR': 'Favoris'}, 'Log': {'en_US': 'Log', 'zh_CN': '\\u65e5\\u5fd7', 'es_LA': 'Registro', 'hi_IN': '\\u0932\\u0949\\u0917', 'ar_SA': '\\u0627\\u0644\\u0633\\u062c\\u0644', 'fr_FR': 'Journal'}, 'Tools': {'en_US': 'Tools', 'zh_CN': '\\u5de5\\u5177', 'es_LA': 'Herramientas', 'hi_IN': '\\u0909\\u092a\\u0915\\u0930\\u0923', 'ar_SA': '\\u0623\\u062f\\u0648\\u0627\\u062a', 'fr_FR': 'Outils'}, 'Select': {'en_US': 'Select', 'zh_CN': '\\u9009\\u62e9', 'es_LA': 'Seleccionar', 'hi_IN': '\\u091a\\u0941\\u0928\\u0947\\u0902', 'ar_SA': '\\u062a\\u062d\\u062f\\u064a\\u062f', 'fr_FR': 'S\\u00e9lectionner'}, 'Sequence': {'en_US': 'Sequence', 'zh_CN': '\\u5e8f\\u5217', 'es_LA': 'Secuencia', 'hi_IN': '\\u0905\\u0928\\u0941\\u0915\\u094d\\u0930\\u092e', 'ar_SA': '\\u062a\\u0633\\u0644\\u0633\\u0644', 'fr_FR': 'S\\u00e9quence'}, 'Side View': {'en_US': 'Side View', 'zh_CN': '\\u4fa7\\u89c6\\u56fe', 'es_LA': 'Vista Lateral', 'hi_IN': '\\u092a\\u093e\\u0930\\u094d\\u0936\\u094d\\u0935 \\u0926\\u0943\\u0936\\u094d\\u092f', 'ar_SA': '\\u0645\\u0646\\u0638\\u0631 \\u062c\\u0627\\u0646\\u0628\\u064a', 'fr_FR': 'Vue Lat\\u00e9rale'}, 'Surface/Mesh': {'en_US': 'Surface/Mesh', 'zh_CN': '\\u8868\\u9762/\\u7f51\\u683c', 'es_LA': 'Superficie/Malla', 'hi_IN': '\\u0938\\u0924\\u0939/\\u091c\\u093e\\u0932', 'ar_SA': '\\u0633\\u0637\\u062d/\\u0634\\u0628\\u0643\\u0629', 'fr_FR': 'Surface/Maillage'}, 'Toolbar': {'en_US': 'Toolbar', 'zh_CN': '\\u5de5\\u5177\\u680f', 'es_LA': 'Barra de Herramientas', 'hi_IN': '\\u091f\\u0942\\u0932\\u092c\\u093e\\u0930', 'ar_SA': '\\u0634\\u0631\\u064a\\u0637 \\u0627\\u0644\\u0623\\u062f\\u0648\\u0627\\u062a', 'fr_FR': "Barre d'Outils"}, 'View': {'en_US': 'View', 'zh_CN': '\\u89c6\\u56fe', 'es_LA': 'Ver', 'hi_IN': '\\u0926\\u0947\\u0916\\u0947\\u0902', 'ar_SA': '\\u0639\\u0631\\u0636', 'fr_FR': 'Affichage'}, 'Window': {'en_US': 'Window', 'zh_CN': '\\u7a97\\u53e3', 'es_LA': 'Ventana', 'hi_IN': '\\u0935\\u093f\\u0902\\u0921\\u094b', 'ar_SA': '\\u0646\\u0627\\u0641\\u0630\\u0629', 'fr_FR': 'Fen\\u00eatre'}, 'Open': {'en_US': 'Open', 'zh_CN': '\\u6253\\u5f00', 'es_LA': 'Abrir', 'hi_IN': '\\u0916\\u094b\\u0932\\u0947\\u0902', 'ar_SA': '\\u0641\\u062a\\u062d', 'fr_FR': 'Ouvrir'}, 'Recent': {'en_US': 'Recent', 'zh_CN': '\\u6700\\u8fd1', 'es_LA': 'Recientes', 'hi_IN': '\\u0939\\u093e\\u0932\\u093f\\u092f\\u093e', 'ar_SA': '\\u0627\\u0644\\u0623\\u062e\\u064a\\u0631\\u0629', 'fr_FR': 'R\\u00e9cents'}, 'Save': {'en_US': 'Save', 'zh_CN': '\\u4fdd\\u5b58', 'es_LA': 'Guardar', 'hi_IN': '\\u0938\\u0939\\u0947\\u091c\\u0947\\u0902', 'ar_SA': '\\u062d\\u0641\\u0638', 'fr_FR': 'Enregistrer'}, 'Snapshot': {'en_US': 'Snapshot', 'zh_CN': '\\u5feb\\u7167', 'es_LA': 'Captura', 'hi_IN': '\\u0938\\u094d\\u0928\\u0948\\u092a\\u0936\\u0949\\u091f', 'ar_SA': '\\u0644\\u0642\\u0637\\u0629 \\u0634\\u0627\\u0634\\u0629', 'fr_FR': 'Capture'}, 'Spin movie': {'en_US': 'Spin movie', 'zh_CN': '\\u65cb\\u8f6c\\u52a8\\u753b', 'es_LA': 'Giro Animado', 'hi_IN': '\\u0918\\u0942\\u0930\\u094d\\u0923\\u0928 \\u092e\\u0942\\u0935\\u0940', 'ar_SA': '\\u0641\\u064a\\u062f\\u064a\\u0648 \\u0627\\u0644\\u062f\\u0648\\u0631\\u0627\\u0646', 'fr_FR': 'Film Rotation'}, 'Show': {'en_US': 'Show', 'zh_CN': '\\u663e\\u793a', 'es_LA': 'Mostrar', 'hi_IN': '\\u0926\\u093f\\u0916\\u093e\\u090f\\u0902', 'ar_SA': '\\u0625\\u0638\\u0647\\u0627\\u0631', 'fr_FR': 'Afficher'}, 'Hide': {'en_US': 'Hide', 'zh_CN': '\\u9690\\u85cf', 'es_LA': 'Ocultar', 'hi_IN': '\\u091b\\u093f\\u092a\\u093e\\u090f\\u0902', 'ar_SA': '\\u0625\\u062e\\u0641\\u0627\\u0621', 'fr_FR': 'Masquer'}, 'Cartoons': {'en_US': 'Cartoons', 'zh_CN': '\\u5361\\u901a', 'es_LA': 'Cintas', 'hi_IN': '\\u0915\\u093e\\u0930\\u094d\\u091f\\u0942\\u0928', 'ar_SA': '\\u0623\\u0634\\u0631\\u0637\\u0629', 'fr_FR': 'Rubans'}, 'Styles': {'en_US': 'Styles', 'zh_CN': '\\u6837\\u5f0f', 'es_LA': 'Estilos', 'hi_IN': '\\u0936\\u0948\\u0932\\u093f\\u092f\\u093e\\u0902', 'ar_SA': '\\u0623\\u0646\\u0645\\u0627\\u0637', 'fr_FR': 'Styles'}, 'Stick': {'en_US': 'Stick', 'zh_CN': '\\u68d2\\u72b6', 'es_LA': 'Varillas', 'hi_IN': '\\u0938\\u094d\\u091f\\u093f\\u0915', 'ar_SA': '\\u0639\\u0635\\u064a', 'fr_FR': 'B\\u00e2tonnets'}, 'Sphere': {'en_US': 'Sphere', 'zh_CN': '\\u7403\\u72b6', 'es_LA': 'Esferas', 'hi_IN': '\\u0917\\u094b\\u0932\\u093e\\u0915\\u093e\\u0930', 'ar_SA': '\\u0643\\u0631\\u0627\\u062a', 'fr_FR': 'Sph\\u00e8res'}, 'Ball': {'en_US': 'Ball', 'zh_CN': '\\u7403\\u68cd', 'es_LA': 'Bolas', 'hi_IN': '\\u0917\\u0947\\u0902\\u0926', 'ar_SA': '\\u0643\\u0631\\u0629', 'fr_FR': 'Boules'}, 'Ball  stick': {'en_US': 'Ball & stick', 'zh_CN': '\\u7403\\u68cd\\u6a21\\u578b', 'es_LA': 'Bolas y Varillas', 'hi_IN': '\\u0917\\u0947\\u0902\\u0926 \\u0914\\u0930 \\u0938\\u094d\\u091f\\u093f\\u0915', 'ar_SA': '\\u0643\\u0631\\u0629 \\u0648\\u0639\\u0635\\u0627', 'fr_FR': 'Boules & B\\u00e2tonnets'}, 'Background': {'en_US': 'Background', 'zh_CN': '\\u80cc\\u666f', 'es_LA': 'Fondo', 'hi_IN': '\\u092a\\u0943\\u0937\\u094d\\u0920\\u092d\\u0942\\u092e\\u093f', 'ar_SA': '\\u0627\\u0644\\u062e\\u0644\\u0641\\u064a\\u0629', 'fr_FR': 'Arri\\u00e8re-plan'}, 'White': {'en_US': 'White', 'zh_CN': '\\u767d\\u8272', 'es_LA': 'Blanco', 'hi_IN': '\\u0938\\u092b\\u0947\\u0926', 'ar_SA': '\\u0623\\u0628\\u064a\\u0636', 'fr_FR': 'Blanc'}, 'Black': {'en_US': 'Black', 'zh_CN': '\\u9ed1\\u8272', 'es_LA': 'Negro', 'hi_IN': '\\u0915\\u093e\\u0932\\u093e', 'ar_SA': '\\u0623\\u0633\\u0648\\u062f', 'fr_FR': 'Noir'}, 'Gray': {'en_US': 'Gray', 'zh_CN': '\\u7070\\u8272', 'es_LA': 'Gris', 'hi_IN': '\\u0927\\u0942\\u0938\\u0930', 'ar_SA': '\\u0631\\u0645\\u0627\\u062f\\u064a', 'fr_FR': 'Gris'}, 'Lighting': {'en_US': 'Lighting', 'zh_CN': '\\u5149\\u7167', 'es_LA': 'Iluminaci\\u00f3n', 'hi_IN': '\\u092a\\u094d\\u0930\\u0915\\u093e\\u0936 \\u0935\\u094d\\u092f\\u0935\\u0938\\u094d\\u0925\\u093e', 'ar_SA': '\\u0627\\u0644\\u0625\\u0636\\u0627\\u0621\\u0629', 'fr_FR': '\\u00c9clairage'}, 'Simple': {'en_US': 'Simple', 'zh_CN': '\\u7b80\\u5355', 'es_LA': 'Simple', 'hi_IN': '\\u0938\\u0930\\u0932', 'ar_SA': '\\u0628\\u0633\\u064a\\u0637', 'fr_FR': 'Simple'}, 'Soft': {'en_US': 'Soft', 'zh_CN': '\\u67d4\\u548c', 'es_LA': 'Suave', 'hi_IN': '\\u0938\\u094c\\u092e\\u094d\\u092f', 'ar_SA': '\\u0646\\u0627\\u0639\\u0645', 'fr_FR': 'Doux'}, 'Full': {'en_US': 'Full', 'zh_CN': '\\u5168\\u5149', 'es_LA': 'Completa', 'hi_IN': '\\u092a\\u0942\\u0930\\u094d\\u0923', 'ar_SA': '\\u0643\\u0627\\u0645\\u0644', 'fr_FR': 'Complet'}, 'Flat': {'en_US': 'Flat', 'zh_CN': '\\u5e73\\u9762', 'es_LA': 'Plana', 'hi_IN': '\\u0938\\u092a\\u093e\\u091f', 'ar_SA': '\\u0645\\u0633\\u0637\\u062d', 'fr_FR': 'Plat'}, 'Selection': {'en_US': 'Selection', 'zh_CN': '\\u9009\\u62e9', 'es_LA': 'Selecci\\u00f3n', 'hi_IN': '\\u091a\\u092f\\u0928', 'ar_SA': '\\u0627\\u0644\\u062a\\u062d\\u062f\\u064a\\u062f', 'fr_FR': 'S\\u00e9lection'}, 'Inspect': {'en_US': 'Inspect', 'zh_CN': '\\u5ba1\\u67e5', 'es_LA': 'Inspeccionar', 'hi_IN': '\\u0928\\u093f\\u0930\\u0940\\u0915\\u094d\\u0937\\u0923', 'ar_SA': '\\u0641\\u062d\\u0635', 'fr_FR': 'Inspecter'}, 'Atoms': {'en_US': 'Atoms', 'zh_CN': '\\u539f\\u5b50', 'es_LA': '\\u00c1tomos', 'hi_IN': '\\u092a\\u0930\\u092e\\u093e\\u0923\\u0941', 'ar_SA': '\\u0630\\u0631\\u0627\\u062a', 'fr_FR': 'Atomes'}, 'Delete': {'en_US': 'Delete', 'zh_CN': '\\u5220\\u9664', 'es_LA': 'Eliminar', 'hi_IN': '\\u0939\\u091f\\u093e\\u090f\\u0902', 'ar_SA': '\\u062d\\u0630\\u0641', 'fr_FR': 'Supprimer'}, 'Distance': {'en_US': 'Distance', 'zh_CN': '\\u8ddd\\u79bb', 'es_LA': 'Distancia', 'hi_IN': '\\u0926\\u0942\\u0930\\u0940', 'ar_SA': '\\u0645\\u0633\\u0627\\u0641\\u0629', 'fr_FR': 'Distance'}, 'Label': {'en_US': 'Label', 'zh_CN': '\\u6807\\u7b7e', 'es_LA': 'Etiqueta', 'hi_IN': '\\u0932\\u0947\\u092c\\u0932', 'ar_SA': '\\u062a\\u0633\\u0645\\u064a\\u0629', 'fr_FR': '\\u00c9tiquette'}, 'Surface': {'en_US': 'Surface', 'zh_CN': '\\u8868\\u9762', 'es_LA': 'Superficie', 'hi_IN': '\\u0938\\u0924\\u0939', 'ar_SA': '\\u0633\\u0637\\u062d', 'fr_FR': 'Surface'}, 'Color': {'en_US': 'Color', 'zh_CN': '\\u989c\\u8272', 'es_LA': 'Color', 'hi_IN': '\\u0930\\u0902\\u0917', 'ar_SA': '\\u0644\\u0648\\u0646', 'fr_FR': 'Couleur'}, 'Center': {'en_US': 'Center', 'zh_CN': '\\u5c45\\u4e2d', 'es_LA': 'Centrar', 'hi_IN': '\\u0915\\u0947\\u0902\\u0926\\u094d\\u0930', 'ar_SA': '\\u062a\\u0648\\u0633\\u064a\\u0637', 'fr_FR': 'Centrer'}, 'View all': {'en_US': 'View all', 'zh_CN': '\\u67e5\\u770b\\u5168\\u90e8', 'es_LA': 'Ver Todo', 'hi_IN': '\\u0938\\u092d\\u0940 \\u0926\\u0947\\u0916\\u0947\\u0902', 'ar_SA': '\\u0639\\u0631\\u0636 \\u0627\\u0644\\u0643\\u0644', 'fr_FR': 'Tout Afficher'}, 'View selected': {'en_US': 'View selected', 'zh_CN': '\\u67e5\\u770b\\u9009\\u4e2d', 'es_LA': 'Ver Selecci\\u00f3n', 'hi_IN': '\\u091a\\u092f\\u0928\\u093f\\u0924 \\u0926\\u0947\\u0916\\u0947\\u0902', 'ar_SA': '\\u0639\\u0631\\u0636 \\u0627\\u0644\\u0645\\u062d\\u062f\\u062f', 'fr_FR': 'Voir S\\u00e9lection'}, 'Zoom': {'en_US': 'Zoom', 'zh_CN': '\\u7f29\\u653e', 'es_LA': 'Zoom', 'hi_IN': '\\u091c\\u093c\\u0942\\u092e', 'ar_SA': '\\u062a\\u0643\\u0628\\u064a\\u0631', 'fr_FR': 'Zoom'}, 'Rotate': {'en_US': 'Rotate', 'zh_CN': '\\u65cb\\u8f6c', 'es_LA': 'Rotar', 'hi_IN': '\\u0918\\u0941\\u092e\\u093e\\u090f\\u0902', 'ar_SA': '\\u062a\\u062f\\u0648\\u064a\\u0631', 'fr_FR': 'Pivoter'}, 'Move': {'en_US': 'Move', 'zh_CN': '\\u79fb\\u52a8', 'es_LA': 'Mover', 'hi_IN': '\\u0938\\u094d\\u0925\\u093e\\u0928\\u093e\\u0902\\u0924\\u0930\\u093f\\u0924 \\u0915\\u0930\\u0947\\u0902', 'ar_SA': '\\u062a\\u062d\\u0631\\u064a\\u0643', 'fr_FR': 'D\\u00e9placer'}, 'Shadow': {'en_US': 'Shadow', 'zh_CN': '\\u9634\\u5f71', 'es_LA': 'Sombras', 'hi_IN': '\\u091b\\u093e\\u092f\\u093e', 'ar_SA': '\\u0638\\u0644\\u0627\\u0644', 'fr_FR': 'Ombre'}, 'Silhouettes': {'en_US': 'Silhouettes', 'zh_CN': '\\u8f6e\\u5ed3\\u7ebf', 'es_LA': 'Siluetas', 'hi_IN': '\\u0938\\u093f\\u0932\\u094d\\u0939\\u0942\\u091f', 'ar_SA': '\\u062e\\u0637\\u0648\\u0637 \\u0627\\u0644\\u0638\\u0644', 'fr_FR': 'Silhouettes'}, '&File': {'en_US': '&File', 'zh_CN': '&\\u6587\\u4ef6', 'es_LA': '&Archivo', 'hi_IN': '&\\u092b\\u093c\\u093e\\u0907\\u0932', 'ar_SA': '&\\u0645\\u0644\\u0641', 'fr_FR': '&Fichier'}, '&Edit': {'en_US': '&Edit', 'zh_CN': '&\\u7f16\\u8f91', 'es_LA': '&Editar', 'hi_IN': '&\\u0938\\u0902\\u092a\\u093e\\u0926\\u093f\\u0924 \\u0915\\u0930\\u0947\\u0902', 'ar_SA': '&\\u062a\\u062d\\u0631\\u064a\\u0631', 'fr_FR': '&\\u00c9dition'}, '&Select': {'en_US': '&Select', 'zh_CN': '&\\u9009\\u62e9', 'es_LA': '&Seleccionar', 'hi_IN': '&\\u091a\\u092f\\u0928', 'ar_SA': '&\\u062a\\u062d\\u062f\\u064a\\u062f', 'fr_FR': '&S\\u00e9lection'}, '&Actions': {'en_US': '&Actions', 'zh_CN': '&\\u64cd\\u4f5c', 'es_LA': '&Acciones', 'hi_IN': '&\\u0915\\u094d\\u0930\\u093f\\u092f\\u093e\\u090f\\u0902', 'ar_SA': '&\\u0625\\u062c\\u0631\\u0627\\u0621\\u0627\\u062a', 'fr_FR': '&Actions'}, 'Fa&vorites': {'en_US': 'Fa&vorites', 'zh_CN': '\\u6536&\\u85cf\\u5939', 'es_LA': 'Fa&voritos', 'hi_IN': '\\u092a&\\u0938\\u0902\\u0926\\u0940\\u0926\\u093e', 'ar_SA': '\\u0627\\u0644\\u0645&\\u0641\\u0636\\u0644\\u0629', 'fr_FR': 'Fa&voris'}, '&Tools': {'en_US': '&Tools', 'zh_CN': '&\\u5de5\\u5177', 'es_LA': '&Herramientas', 'hi_IN': '&\\u0909\\u092a\\u0915\\u0930\\u0923', 'ar_SA': '&\\u0623\\u062f\\u0648\\u0627\\u062a', 'fr_FR': '&Outils'}, '&Help': {'en_US': '&Help', 'zh_CN': '&\\u5e2e\\u52a9', 'es_LA': '&Ayuda', 'hi_IN': '&\\u0938\\u0939\\u093e\\u092f\\u0924\\u093e', 'ar_SA': '&\\u0645\\u0633\\u0627\\u0639\\u062f\\u0629', 'fr_FR': '&Aide'}, 'Gris': {'en_US': 'Gray', 'zh_CN': '\\u7070\\u8272', 'es_LA': 'Gris', 'hi_IN': '\\u0927\\u0942\\u0938\\u0930', 'ar_SA': '\\u0631\\u0645\\u0627\\u062f\\u064a', 'fr_FR': 'Gris'}, 'Oscuro': {'en_US': 'Dark', 'zh_CN': '\\u6df1\\u8272', 'es_LA': 'Oscuro', 'hi_IN': '\\u0917\\u0939\\u0930\\u093e', 'ar_SA': '\\u062f\\u0627\\u0643\\u0646', 'fr_FR': 'Sombre'}, 'Get started': {'en_US': 'Get started', 'zh_CN': '\\u5f00\\u59cb\\u4f7f\\u7528', 'es_LA': 'Primeros pasos', 'hi_IN': '\\u0906\\u0930\\u0902\\u092d \\u0915\\u0930\\u0947\\u0902', 'ar_SA': '\\u0627\\u0628\\u062f\\u0623 \\u0627\\u0644\\u0622\\u0646', 'fr_FR': 'D\\u00e9marrer'}, 'Settings...': {'en_US': 'Settings...', 'zh_CN': '\\u8bbe\\u7f6e...', 'es_LA': 'Configuraci\\u00f3n...', 'hi_IN': '\\u0938\\u0947\\u091f\\u093f\\u0902\\u0917\\u094d\\u0938...', 'ar_SA': '\\u0627\\u0644\\u0625\\u0639\\u062f\\u0627\\u062f\\u0627\\u062a...', 'fr_FR': 'Param\\u00e8tres...'}, 'Show button labels': {'en_US': 'Show button labels', 'zh_CN': '\\u663e\\u793a\\u6309\\u94ae\\u6807\\u7b7e', 'es_LA': 'Mostrar etiquetas de botones', 'hi_IN': '\\u092c\\u091f\\u0928 \\u0932\\u0947\\u092c\\u0932 \\u0926\\u093f\\u0916\\u093e\\u090f\\u0902', 'ar_SA': '\\u0625\\u0638\\u0647\\u0627\\u0631 \\u062a\\u0633\\u0645\\u064a\\u0627\\u062a \\u0627\\u0644\\u0623\\u0632\\u0631\\u0627\\u0631', 'fr_FR': 'Afficher les \\u00e9tiquettes des boutons'}, 'Show section labels': {'en_US': 'Show section labels', 'zh_CN': '\\u663e\\u793a\\u5206\\u7ec4\\u6807\\u7b7e', 'es_LA': 'Mostrar etiquetas de secci\\u00f3n', 'hi_IN': '\\u0905\\u0928\\u0941\\u092d\\u093e\\u0917 \\u0932\\u0947\\u092c\\u0932 \\u0926\\u093f\\u0916\\u093e\\u090f\\u0902', 'ar_SA': '\\u0625\\u0638\\u0647\\u0627\\u0631 \\u062a\\u0633\\u0645\\u064a\\u0627\\u062a \\u0627\\u0644\\u0623\\u0642\\u0633\\u0627\\u0645', 'fr_FR': 'Afficher les \\u00e9tiquettes de section'}, 'Aplicando paleta visual...': {'en_US': 'Applying visual theme...', 'zh_CN': '\\u5e94\\u7528\\u89c6\\u89c9\\u4e3b\\u9898...', 'es_LA': 'Aplicando paleta visual...', 'hi_IN': '\\u0926\\u0943\\u0936\\u094d\\u092f \\u0925\\u0940\\u092e \\u0932\\u093e\\u0917\\u0942 \\u0915\\u0940 \\u091c\\u093e \\u0930\\u0939\\u0940 \\u0939\\u0948...', 'ar_SA': '\\u062a\\u0637\\u0628\\u064a\\u0642 \\u0627\\u0644\\u0633\\u0645\\u0629 \\u0627\\u0644\\u0628\\u0635\\u0631\\u064a\\u0629...', 'fr_FR': 'Application du th\\u00e8me visuel...'}, 'Sincronizando paneles y visor 3D...': {'en_US': 'Synchronizing panels and 3D viewport...', 'zh_CN': '\\u540c\\u6b65\\u9762\\u677f\\u548c 3D \\u89c6\\u53e3...', 'es_LA': 'Sincronizando paneles y visor 3D...', 'hi_IN': '\\u092a\\u0948\\u0928\\u0932 \\u0914\\u0930 3D \\u0935\\u094d\\u092f\\u0942 \\u092a\\u094b\\u0930\\u094d\\u091f \\u0938\\u093f\\u0902\\u0915 \\u0939\\u094b \\u0930\\u0939\\u0947 \\u0939\\u0948\\u0902...', 'ar_SA': '\\u0645\\u0632\\u0627\\u0645\\u0646\\u0629 \\u0627\\u0644\\u0644\\u0648\\u062d\\u0627\\u062a \\u0648\\u0645\\u0646\\u0641\\u0630 \\u0627\\u0644\\u0639\\u0631\\u0636 \\u062b\\u0644\\u0627\\u062b\\u064a \\u0627\\u0644\\u0623\\u0628\\u0639\\u0627\\u062f...', 'fr_FR': 'Synchronisation des panneaux et de la vue 3D...'}, 'Compilando shaders...': {'en_US': 'Compiling shaders...', 'zh_CN': '\\u7f16\\u8bd1\\u7740\\u8272\\u5668...', 'es_LA': 'Compilando shaders...', 'hi_IN': '\\u0936\\u0947\\u0921\\u0930\\u094d\\u0938 \\u0938\\u0902\\u0915\\u0932\\u093f\\u0924 \\u0915\\u093f\\u090f \\u091c\\u093e \\u0930\\u0939\\u0947 \\u0939\\u0948\\u0902...', 'ar_SA': '\\u062a\\u062c\\u0645\\u064a\\u0639 \\u0628\\u0631\\u0627\\u0645\\u062c \\u0627\\u0644\\u062a\\u0638\\u0644\\u064a\\u0644...', 'fr_FR': 'Compilation des shaders...'}, 'Estabilizando fotogramas...': {'en_US': 'Stabilizing frames...', 'zh_CN': '\\u7a33\\u5b9a\\u5e27\\u7387...', 'es_LA': 'Estabilizando fotogramas...', 'hi_IN': '\\u092b\\u093c\\u094d\\u0930\\u0947\\u092e \\u0938\\u094d\\u0925\\u093f\\u0930 \\u0915\\u093f\\u090f \\u091c\\u093e \\u0930\\u0939\\u0947 \\u0939\\u0948\\u0902...', 'ar_SA': '\\u0627\\u0633\\u062a\\u0642\\u0631\\u0627\\u0631 \\u0627\\u0644\\u0625\\u0637\\u0627\\u0631\\u0627\\u062a...', 'fr_FR': 'Stabilisation des images...'}, 'Interfaz lista': {'en_US': 'Interface ready', 'zh_CN': '\\u754c\\u9762\\u5df2\\u5c31\\u7eea', 'es_LA': 'Interfaz lista', 'hi_IN': '\\u0907\\u0902\\u091f\\u0930\\u092b\\u093c\\u0947\\u0938 \\u0924\\u0948\\u092f\\u093e\\u0930 \\u0939\\u0948', 'ar_SA': '\\u0627\\u0644\\u0648\\u0627\\u062c\\u0647\\u0629 \\u062c\\u0627\\u0647\\u0632\\u0629', 'fr_FR': 'Interface pr\\u00eate'}, 'Iniciando recursos...': {'en_US': 'Initializing resources...', 'zh_CN': '\\u6b63\\u5728\\u521d\\u59cb\\u5316\\u8d44\\u6e90...', 'es_LA': 'Iniciando recursos...', 'hi_IN': '\\u0938\\u0902\\u0938\\u093e\\u0927\\u0928 \\u092a\\u094d\\u0930\\u093e\\u0930\\u0902\\u092d \\u0939\\u094b \\u0930\\u0939\\u0947 \\u0939\\u0948\\u0902...', 'ar_SA': '\\u0628\\u062f\\u0621 \\u0627\\u0644\\u0645\\u0648\\u0627\\u0631\\u062f...', 'fr_FR': 'Initialisation des ressources...'}, 'Cargando m\\u00f3dulos...': {'en_US': 'Loading modules...', 'zh_CN': '\\u52a0\\u8f7d\\u6a21\\u5757...', 'es_LA': 'Cargando m\\u00f3dulos...', 'hi_IN': '\\u092e\\u0949\\u0921\\u094d\\u092f\\u0942\\u0932 \\u0932\\u094b\\u0921 \\u0939\\u094b \\u0930\\u0939\\u0947 \\u0939\\u0948\\u0902...', 'ar_SA': '\\u062a\\u062d\\u0645\\u064a\\u0644 \\u0627\\u0644\\u0648\\u062d\\u062f\\u0627\\u062a...', 'fr_FR': 'Chargement des modules...'}, 'Modelo 3D': {'en_US': '3D Model', 'zh_CN': '3D \\u6a21\\u578b', 'es_LA': 'Modelo 3D', 'hi_IN': '3D \\u092e\\u0949\\u0921\\u0932', 'ar_SA': '\\u0646\\u0645\\u0648\\u0630\\u062c \\u062b\\u0644\\u0627\\u062b\\u064a \\u0627\\u0644\\u0623\\u0628\\u0639\\u0627\\u062f', 'fr_FR': 'Mod\\u00e8le 3D'}, 'Airways': {'en_US': 'Airways', 'zh_CN': '\\u6c14\\u9053', 'es_LA': 'V\\u00edas a\\u00e9reas', 'hi_IN': '\\u0936\\u094d\\u0935\\u0938\\u0928 \\u092e\\u093e\\u0930\\u094d\\u0917', 'ar_SA': '\\u0627\\u0644\\u0645\\u0633\\u0627\\u0644\\u0643 \\u0627\\u0644\\u0647\\u0648\\u0627\\u0626\\u064a\\u0629', 'fr_FR': 'Voies respiratoires'}, 'Atom Style': {'en_US': 'Atom Style', 'zh_CN': '\\u539f\\u5b50\\u6837\\u5f0f', 'es_LA': 'Estilo de \\u00e1tomos', 'hi_IN': '\\u092a\\u0930\\u092e\\u093e\\u0923\\u0941 \\u0936\\u0948\\u0932\\u0940', 'ar_SA': '\\u0646\\u0645\\u0637 \\u0627\\u0644\\u0630\\u0631\\u0629', 'fr_FR': 'Style atome'}, 'Atoms/Bonds': {'en_US': 'Atoms/Bonds', 'zh_CN': '\\u539f\\u5b50/\\u952e', 'es_LA': '\\u00c1tomos/Enlaces', 'hi_IN': '\\u092a\\u0930\\u092e\\u093e\\u0923\\u0941/\\u092c\\u0902\\u0927', 'ar_SA': '\\u0630\\u0631\\u0627\\u062a/\\u0631\\u0648\\u0627\\u0628\\u0637', 'fr_FR': 'Atomes/Liaisons'}, 'Binding Analysis': {'en_US': 'Binding Analysis', 'zh_CN': '\\u7ed3\\u5408\\u5206\\u6790', 'es_LA': 'An\\u00e1lisis de uni\\u00f3n', 'hi_IN': '\\u092c\\u0902\\u0927\\u0928 \\u0935\\u093f\\u0936\\u094d\\u0932\\u0947\\u0937\\u0923', 'ar_SA': '\\u062a\\u062d\\u0644\\u064a\\u0644 \\u0627\\u0644\\u0627\\u0631\\u062a\\u0628\\u0627\\u0637', 'fr_FR': 'Analyse liaison'}, 'Blob': {'en_US': 'Blob', 'zh_CN': '\\u6591\\u5757', 'es_LA': 'Mancha', 'hi_IN': '\\u092c\\u094d\\u0932\\u0949\\u092c', 'ar_SA': '\\u0643\\u062a\\u0644\\u0629', 'fr_FR': 'Goutte'}, 'Bond rotation': {'en_US': 'Bond rotation', 'zh_CN': '\\u952e\\u65cb\\u8f6c', 'es_LA': 'Rotaci\\u00f3n de enlace', 'hi_IN': '\\u092c\\u0902\\u0927 \\u0918\\u0942\\u0930\\u094d\\u0923\\u0928', 'ar_SA': '\\u062f\\u0648\\u0631\\u0627\\u0646 \\u0627\\u0644\\u0631\\u0627\\u0628\\u0637\\u0629', 'fr_FR': 'Rotation liaison'}, 'Brain CT': {'en_US': 'Brain CT', 'zh_CN': '\\u8111\\u90e8 CT', 'es_LA': 'TC Cerebral', 'hi_IN': '\\u092e\\u0938\\u094d\\u0924\\u093f\\u0937\\u094d\\u0915 \\u0938\\u0940\\u091f\\u0940', 'ar_SA': '\\u0623\\u0634\\u0639\\u0629 \\u0645\\u0642\\u0637\\u0639\\u064a\\u0629 \\u0644\\u0644\\u0645\\u062e', 'fr_FR': 'TDM C\\u00e9r\\u00e9brale'}, 'Cartoon': {'en_US': 'Cartoon', 'zh_CN': '\\u5361\\u901a\\u5e26\\u72b6', 'es_LA': 'Cinta', 'hi_IN': '\\u0915\\u093e\\u0930\\u094d\\u091f\\u0942\\u0928', 'ar_SA': '\\u0634\\u0631\\u064a\\u0637 \\u0643\\u0631\\u062a\\u0648\\u0646\\u064a', 'fr_FR': 'Ruban'}, 'Chest CT': {'en_US': 'Chest CT', 'zh_CN': '\\u80f8\\u90e8 CT', 'es_LA': 'TC Tor\\u00e1cica', 'hi_IN': '\\u091b\\u093e\\u0924\\u0940 \\u0938\\u0940\\u091f\\u0940', 'ar_SA': '\\u0623\\u0634\\u0639\\u0629 \\u0645\\u0642\\u0637\\u0639\\u064a\\u0629 \\u0644\\u0644\\u0635\\u062f\\u0631', 'fr_FR': 'TDM Thoracique'}, 'Clip': {'en_US': 'Clip', 'zh_CN': '\\u622a\\u9762\\u88c1\\u526a', 'es_LA': 'Recorte', 'hi_IN': '\\u0915\\u094d\\u0932\\u093f\\u092a', 'ar_SA': '\\u0642\\u0635', 'fr_FR': 'Coupe'}, 'Clip rotate': {'en_US': 'Clip rotate', 'zh_CN': '\\u65cb\\u8f6c\\u622a\\u9762', 'es_LA': 'Rotar recorte', 'hi_IN': '\\u0915\\u094d\\u0932\\u093f\\u092a \\u0918\\u0942\\u0930\\u094d\\u0923\\u0928', 'ar_SA': '\\u062a\\u062f\\u0648\\u064a\\u0631 \\u0627\\u0644\\u0642\\u0635', 'fr_FR': 'Pivoter coupe'}, 'Color near atoms': {'en_US': 'Color near atoms', 'zh_CN': '\\u6309\\u4e34\\u8fd1\\u539f\\u5b50\\u7740\\u8272', 'es_LA': 'Colorear seg\\u00fan \\u00e1tomos', 'hi_IN': '\\u092a\\u0930\\u092e\\u093e\\u0923\\u0941\\u0913\\u0902 \\u0915\\u0947 \\u092a\\u093e\\u0938 \\u0930\\u0902\\u0917', 'ar_SA': '\\u062a\\u0644\\u0648\\u064a\\u0646 \\u0642\\u0631\\u0628 \\u0627\\u0644\\u0630\\u0631\\u0627\\u062a', 'fr_FR': 'Colorer selon atomes'}, 'Contour level': {'en_US': 'Contour level', 'zh_CN': '\\u7b49\\u503c\\u9762\\u7ea7\\u522b', 'es_LA': 'Nivel de contorno', 'hi_IN': '\\u0938\\u092e\\u094b\\u091a\\u094d\\u091a \\u0938\\u094d\\u0924\\u0930', 'ar_SA': '\\u0645\\u0633\\u062a\\u0648\\u0649 \\u0627\\u0644\\u0643\\u0646\\u062a\\u0648\\u0631', 'fr_FR': 'Niveau de contour'}, 'Crop': {'en_US': 'Crop', 'zh_CN': '\\u88c1\\u526a', 'es_LA': 'Recortar', 'hi_IN': '\\u0915\\u094d\\u0930\\u0949\\u092a', 'ar_SA': '\\u0627\\u0642\\u062a\\u0635\\u0627\\u0635', 'fr_FR': 'Recadrer'}, 'Default thresholds': {'en_US': 'Default thresholds', 'zh_CN': '\\u9ed8\\u8ba4\\u9608\\u503c', 'es_LA': 'Umbrales por defecto', 'hi_IN': '\\u0921\\u093f\\u092b\\u093c\\u0949\\u0932\\u094d\\u091f \\u0925\\u094d\\u0930\\u0947\\u0936\\u094b\\u0932\\u094d\\u0921', 'ar_SA': '\\u0627\\u0644\\u0639\\u062a\\u0628\\u0627\\u062a \\u0627\\u0644\\u0627\\u0641\\u062a\\u0631\\u0627\\u0636\\u064a\\u0629', 'fr_FR': 'Seuils par d\\u00e9faut'}, 'Depiction': {'en_US': 'Depiction', 'zh_CN': '\\u8868\\u73b0\\u5f62\\u5f0f', 'es_LA': 'Representaci\\u00f3n', 'hi_IN': '\\u091a\\u093f\\u0924\\u094d\\u0930\\u0923', 'ar_SA': '\\u062a\\u0645\\u062b\\u064a\\u0644', 'fr_FR': 'Repr\\u00e9sentation'}, 'Drag model': {'en_US': 'Drag model', 'zh_CN': '\\u62d6\\u62fd\\u6a21\\u578b', 'es_LA': 'Arrastrar modelo', 'hi_IN': '\\u092e\\u0949\\u0921\\u0932 \\u0916\\u0940\\u0902\\u091a\\u0947\\u0902', 'ar_SA': '\\u0633\\u062d\\u0628 \\u0627\\u0644\\u0646\\u0645\\u0648\\u0630\\u062c', 'fr_FR': 'Glisser mod\\u00e8le'}, 'Erase': {'en_US': 'Erase', 'zh_CN': '\\u64e6\\u9664', 'es_LA': 'Borrar', 'hi_IN': '\\u092e\\u093f\\u091f\\u093e\\u090f\\u0902', 'ar_SA': '\\u0645\\u0633\\u062d', 'fr_FR': 'Effacer'}, 'Filled': {'en_US': 'Filled', 'zh_CN': '\\u5b9e\\u5fc3', 'es_LA': 'Relleno', 'hi_IN': '\\u092d\\u0930\\u093e \\u0939\\u0941\\u0906', 'ar_SA': '\\u0645\\u0645\\u062a\\u0644\\u0626', 'fr_FR': 'Rempli'}, 'Fit': {'en_US': 'Fit', 'zh_CN': '\\u62df\\u5408', 'es_LA': 'Ajustar', 'hi_IN': '\\u092b\\u093f\\u091f', 'ar_SA': '\\u0645\\u0644\\u0627\\u0621\\u0645\\u0629', 'fr_FR': 'Ajuster'}, 'General': {'en_US': 'General', 'zh_CN': '\\u901a\\u7528', 'es_LA': 'General', 'hi_IN': '\\u0938\\u093e\\u092e\\u093e\\u0928\\u094d\\u092f', 'ar_SA': '\\u0639\\u0627\\u0645', 'fr_FR': 'G\\u00e9n\\u00e9ral'}, 'H-bonds': {'en_US': 'H-bonds', 'zh_CN': '\\u6c22\\u952e', 'es_LA': 'Puentes H', 'hi_IN': '\\u0939\\u093e\\u0907\\u0921\\u094d\\u0930\\u094b\\u091c\\u0928 \\u092c\\u0902\\u0927', 'ar_SA': '\\u0631\\u0648\\u0627\\u0628\\u0637 \\u0647\\u064a\\u062f\\u0631\\u0648\\u062c\\u064a\\u0646\\u064a\\u0629', 'fr_FR': 'Liaisons H'}, 'Hide H-bonds': {'en_US': 'Hide H-bonds', 'zh_CN': '\\u9690\\u85cf\\u6c22\\u952e', 'es_LA': 'Ocultar puentes H', 'hi_IN': '\\u0939\\u093e\\u0907\\u0921\\u094d\\u0930\\u094b\\u091c\\u0928 \\u092c\\u0902\\u0927 \\u091b\\u0941\\u092a\\u093e\\u090f\\u0902', 'ar_SA': '\\u0625\\u062e\\u0641\\u0627\\u0621 \\u0627\\u0644\\u0631\\u0648\\u0627\\u0628\\u0637 \\u0627\\u0644\\u0647\\u064a\\u062f\\u0631\\u0648\\u062c\\u064a\\u0646\\u064a\\u0629', 'fr_FR': 'Masquer liaisons H'}, 'Hide dust': {'en_US': 'Hide dust', 'zh_CN': '\\u9690\\u85cf\\u566a\\u70b9', 'es_LA': 'Ocultar ruido', 'hi_IN': '\\u0927\\u0942\\u0932 \\u091b\\u0941\\u092a\\u093e\\u090f\\u0902', 'ar_SA': '\\u0625\\u062e\\u0641\\u0627\\u0621 \\u0627\\u0644\\u063a\\u0628\\u0627\\u0631', 'fr_FR': 'Masquer poussi\\u00e8re'}, 'Higher-Order Structure': {'en_US': 'Higher-Order Structure', 'zh_CN': '\\u9ad8\\u9636\\u7ed3\\u6784', 'es_LA': 'Estructura de orden superior', 'hi_IN': '\\u0909\\u091a\\u094d\\u091a-\\u0915\\u094d\\u0930\\u092e \\u0938\\u0902\\u0930\\u091a\\u0928\\u093e', 'ar_SA': '\\u0628\\u0646\\u064a\\u0629 \\u0639\\u0627\\u0644\\u064a\\u0629 \\u0627\\u0644\\u0631\\u062a\\u0628\\u0629', 'fr_FR': 'Structure sup\\u00e9rieure'}, 'Interfaces': {'en_US': 'Interfaces', 'zh_CN': '\\u754c\\u9762', 'es_LA': 'Interfaces', 'hi_IN': '\\u0907\\u0902\\u091f\\u0930\\u092b\\u0947\\u0938', 'ar_SA': '\\u0648\\u0627\\u062c\\u0647\\u0627\\u062a', 'fr_FR': 'Interfaces'}, 'Invert': {'en_US': 'Invert', 'zh_CN': '\\u53cd\\u9009', 'es_LA': 'Invertir', 'hi_IN': '\\u0909\\u0932\\u091f\\u0947\\u0902', 'ar_SA': '\\u0639\\u0915\\u094d\\u0938', 'fr_FR': 'Inverser'}, 'Key': {'en_US': 'Key', 'zh_CN': '\\u56fe\\u4f8b', 'es_LA': 'Clave', 'hi_IN': '\\u0915\\u0941\\u0902\\u091c\\u0940', 'ar_SA': '\\u0645\\u0641\\u062a\\u0627\\u062d', 'fr_FR': 'L\\u00e9gende'}, 'Ladder': {'en_US': 'Ladder', 'zh_CN': '\\u9636\\u68af', 'es_LA': 'Escalera', 'hi_IN': '\\u0938\\u0940\\u0922\\u093c\\u0940', 'ar_SA': '\\u0633\\u0644\\u0645', 'fr_FR': '\\u00c9chelle'}, 'Link': {'en_US': 'Link', 'zh_CN': '\\u8fde\\u63a5', 'es_LA': 'Enlace', 'hi_IN': '\\u0932\\u093f\\u0902\\u0915', 'ar_SA': '\\u0631\\u0627\\u0628\\u0637', 'fr_FR': 'Lien'}, 'Maximum': {'en_US': 'Maximum', 'zh_CN': '\\u6700\\u5927\\u503c', 'es_LA': 'M\\u00e1ximo', 'hi_IN': '\\u0905\\u0927\\u093f\\u0915\\u0924\\u092e', 'ar_SA': '\\u0627\\u0644\\u062d\\u062f \\u0627\\u0644\\u0623\\u0642\\u0635\\u0649', 'fr_FR': 'Maximum'}, 'Medical Imaging': {'en_US': 'Medical Imaging', 'zh_CN': '\\u533b\\u5b66\\u6210\\u50cf', 'es_LA': 'Im\\u00e1genes m\\u00e9dicas', 'hi_IN': '\\u091a\\u093f\\u0915\\u093f\\u0924\\u094d\\u0938\\u093e \\u0907\\u092e\\u0947\\u091c\\u093f\\u0902\\u0917', 'ar_SA': '\\u0627\\u0644\\u062a\\u0635\\u0648\\u064a\\u0631 \\u0627\\u0644\\u0637\\u0628\\u064a', 'fr_FR': 'Imagerie m\\u00e9dicale'}, 'Menu Mode: Replace': {'en_US': 'Menu Mode: Replace', 'zh_CN': '\\u83dc\\u5355\\u6a21\\u5f0f: \\u66ff\\u6362', 'es_LA': 'Modo Men\\u00fa: Reemplazar', 'hi_IN': '\\u092e\\u0947\\u0928\\u0942 \\u092e\\u094b\\u0921: \\u092c\\u0926\\u0932\\u0947\\u0902', 'ar_SA': '\\u0648\\u0636\\u0639 \\u0627\\u0644\\u0642\\u0627\\u0626\\u0645\\u0629: \\u0627\\u0633\\u062a\\u0628\\u062f\\u0627\\u0644', 'fr_FR': 'Mode Menu: Remplacer'}, 'Minimize': {'en_US': 'Minimize', 'zh_CN': '\\u80fd\\u91cf\\u6700\\u5c0f\\u5316', 'es_LA': 'Minimizar', 'hi_IN': '\\u0928\\u094d\\u092f\\u0942\\u0928\\u0924\\u092e \\u0915\\u0930\\u0947\\u0902', 'ar_SA': '\\u062a\\u0642\\u0644\\u064a\\u0644 \\u0627\\u0644\\u0637\\u0627\\u0642\\u0629', 'fr_FR': 'Minimiser'}, 'Move atoms': {'en_US': 'Move atoms', 'zh_CN': '\\u79fb\\u52a8\\u539f\\u5b50', 'es_LA': 'Mover \\u00e1tomos', 'hi_IN': '\\u092a\\u0930\\u092e\\u093e\\u0923\\u0941 \\u0939\\u093f\\u0932\\u093e\\u090f\\u0902', 'ar_SA': '\\u062a\\u062d\\u0631\\u064a\\u0643 \\u0627\\u0644\\u0630\\u0631\\u0627\\u062a', 'fr_FR': 'D\\u00e9placer atomes'}, 'Move label': {'en_US': 'Move label', 'zh_CN': '\\u79fb\\u52a8\\u6807\\u7b7e', 'es_LA': 'Mover etiqueta', 'hi_IN': '\\u0932\\u0947\\u092c\\u0932 \\u0939\\u093f\\u0932\\u093e\\u090f\\u0902', 'ar_SA': '\\u062a\\u062d\\u0631\\u064a\\u0643 \\u0627\\u0644\\u062a\\u0633\\u0645\\u064a\\u0629', 'fr_FR': 'D\\u00e9placer \\u00e9tiquette'}, 'Move model': {'en_US': 'Move model', 'zh_CN': '\\u79fb\\u52a8\\u6a21\\u578b', 'es_LA': 'Mover modelo', 'hi_IN': '\\u092e\\u0949\\u0921\\u0932 \\u0939\\u093f\\u0932\\u093e\\u090f\\u0902', 'ar_SA': '\\u062a\\u062d\\u0631\\u064a\\u0643 \\u0627\\u0644\\u0646\\u0645\\u0648\\u0630\\u062c', 'fr_FR': 'D\\u00e9placer mod\\u00e8le'}, 'Move planes': {'en_US': 'Move planes', 'zh_CN': '\\u79fb\\u52a8\\u5207\\u9762', 'es_LA': 'Mover planos', 'hi_IN': '\\u0924\\u0932 \\u0939\\u093f\\u0932\\u093e\\u090f\\u0902', 'ar_SA': '\\u062a\\u062d\\u0631\\u064a\\u0643 \\u0627\\u0644\\u0645\\u0633\\u062a\\u0648\\u064a\\u0627\\u062a', 'fr_FR': 'D\\u00e9placer plans'}, 'Next docked': {'en_US': 'Next docked', 'zh_CN': '\\u4e0b\\u4e00\\u4e2a\\u505c\\u9760', 'es_LA': 'Siguiente acoplado', 'hi_IN': '\\u0905\\u0917\\u0932\\u093e \\u0921\\u0949\\u0915', 'ar_SA': '\\u0627\\u0644\\u0645\\u062b\\u0628\\u062a \\u0627\\u0644\\u062a\\u0627\\u0644\\u064a', 'fr_FR': 'Ancr\\u00e9 suivant'}, 'Nucleotide Style': {'en_US': 'Nucleotide Style', 'zh_CN': '\\u6838\\u82f7\\u9178\\u6837\\u5f0f', 'es_LA': 'Estilo de nucle\\u00f3tidos', 'hi_IN': '\\u0928\\u094d\\u092f\\u0942\\u0915\\u094d\\u0932\\u093f\\u092f\\u094b\\u091f\\u093e\\u0907\\u0921 \\u0936\\u0948\\u0932\\u0940', 'ar_SA': '\\u0646\\u0645\\u0637 \\u0627\\u0644\\u0646\\u064a\\u0648\\u0643\\u0644\\u064a\\u0648\\u062a\\u064a\\u062f\\u0627\\u062a', 'fr_FR': 'Style nucl\\u00e9otide'}, 'Open DICOM': {'en_US': 'Open DICOM', 'zh_CN': '\\u6253\\u5f00 DICOM', 'es_LA': 'Abrir DICOM', 'hi_IN': 'DICOM \\u0916\\u094b\\u0932\\u0947\\u0902', 'ar_SA': '\\u0641\\u062a\\u062d DICOM', 'fr_FR': 'Ouvrir DICOM'}, 'Orient': {'en_US': 'Orient', 'zh_CN': '\\u5bf9\\u9f50\\u65b9\\u5411', 'es_LA': 'Orientar', 'hi_IN': '\\u0926\\u093f\\u0936\\u093e \\u0938\\u0902\\u0930\\u0947\\u0916\\u093f\\u0924 \\u0915\\u0930\\u0947\\u0902', 'ar_SA': '\\u062a\\u0648\\u062c\\u064a\\u0647', 'fr_FR': 'Orienter'}, 'Orthoplanes': {'en_US': 'Orthoplanes', 'zh_CN': '\\u6b63\\u4ea4\\u5207\\u9762', 'es_LA': 'Planos ortogonales', 'hi_IN': '\\u0911\\u0930\\u094d\\u0925\\u094b\\u092a\\u094d\\u0932\\u0947\\u0928', 'ar_SA': '\\u0645\\u0633\\u062a\\u0648\\u064a\\u0627\\u062a \\u0645\\u062a\\u0639\\u0627\\u0645\\u062f\\u0629', 'fr_FR': 'Plans orthogonaux'}, 'Other': {'en_US': 'Other', 'zh_CN': '\\u5176\\u4ed6', 'es_LA': 'Otro', 'hi_IN': '\\u0905\\u0928\\u094d\\u092f', 'ar_SA': '\\u0623\\u062e\\u0631\\u0649', 'fr_FR': 'Autre'}, 'Outline box': {'en_US': 'Outline box', 'zh_CN': '\\u8fb9\\u6846\\u7ebf\\u6846', 'es_LA': 'Caja de contorno', 'hi_IN': '\\u0930\\u0942\\u092a\\u0930\\u0947\\u0916\\u093e \\u092c\\u0949\\u0915\\u094d\\u0938', 'ar_SA': '\\u0645\\u0631\\u0628\\u0639 \\u0627\\u0644\\u0645\\u062d\\u064a\\u0637', 'fr_FR': 'Bo\\u00eete englobante'}, 'Perpendicular slices': {'en_US': 'Perpendicular slices', 'zh_CN': '\\u5782\\u76f4\\u5207\\u7247', 'es_LA': 'Cortes perpendiculares', 'hi_IN': '\\u0932\\u0902\\u092c\\u0935\\u0924 \\u0938\\u094d\\u0932\\u093e\\u0907\\u0938', 'ar_SA': '\\u0634\\u0631\\u0627\\u0626\\u062d \\u0639\\u0645\\u0648\\u062f\\u064a\\u0629', 'fr_FR': 'Coupes perpendiculaires'}, 'Pivot': {'en_US': 'Pivot', 'zh_CN': '\\u8f74\\u5fc3\\u4e2d\\u5fc3', 'es_LA': 'Pivote', 'hi_IN': '\\u0927\\u0941\\u0930\\u0940', 'ar_SA': '\\u0645\\u062d\\u0648\\u0631', 'fr_FR': 'Pivot'}, 'Plain': {'en_US': 'Plain', 'zh_CN': '\\u5e73\\u9762', 'es_LA': 'Simple', 'hi_IN': '\\u0938\\u093e\\u0926\\u093e', 'ar_SA': '\\u0628\\u0633\\u064a\\u0637', 'fr_FR': 'Simple'}, 'Plane': {'en_US': 'Plane', 'zh_CN': '\\u5207\\u9762', 'es_LA': 'Plano', 'hi_IN': '\\u0938\\u092e\\u0924\\u0932', 'ar_SA': '\\u0645\\u0633\\u062a\\u0648\\u0649', 'fr_FR': 'Plan'}, 'Play coords': {'en_US': 'Play coords', 'zh_CN': '\\u64ad\\u653e\\u5750\\u6807', 'es_LA': 'Reproducir coords', 'hi_IN': '\\u0928\\u093f\\u0930\\u094d\\u0926\\u0947\\u0936\\u093e\\u0902\\u0915 \\u091a\\u0932\\u093e\\u090f\\u0902', 'ar_SA': '\\u062a\\u0634\\u063a\\u064a\\u0644 \\u0627\\u0644\\u0625\\u062d\\u062f\\u0627\\u062b\\u064a\\u0627\\u062a', 'fr_FR': 'Lire coords'}, 'Play series': {'en_US': 'Play series', 'zh_CN': '\\u64ad\\u653e\\u5e8f\\u5217', 'es_LA': 'Reproducir serie', 'hi_IN': '\\u0936\\u094d\\u0930\\u0943\\u0902\\u0916\\u0932\\u093e \\u091a\\u0932\\u093e\\u090f\\u0902', 'ar_SA': '\\u062a\\u0634\\u063a\\u064a\\u0644 \\u0627\\u0644\\u0633\\u0644\\u0633\\u0644\\u0629', 'fr_FR': 'Lire s\\u00e9rie'}, 'Point': {'en_US': 'Point', 'zh_CN': '\\u70b9', 'es_LA': 'Punto', 'hi_IN': '\\u092c\\u093f\\u0902\\u0926\\u0941', 'ar_SA': '\\u0646\\u0642\\u0637\\u0629', 'fr_FR': 'Point'}, 'Presets': {'en_US': 'Presets', 'zh_CN': '\\u9884\\u8bbe', 'es_LA': 'Ajustes predefinidos', 'hi_IN': '\\u092a\\u094d\\u0930\\u0940\\u0938\\u0947\\u091f', 'ar_SA': '\\u0625\\u0639\\u062f\\u0627\\u062f\\u0627\\u062a \\u0645\\u0633\\u0628\\u0642\\u0629', 'fr_FR': 'Pr\\u00e9r\\u00e9glages'}, 'Raycasting': {'en_US': 'Raycasting', 'zh_CN': '\\u5149\\u7ebf\\u6295\\u5c04', 'es_LA': 'Trazado de rayos', 'hi_IN': '\\u0930\\u0947-\\u0915\\u093e\\u0938\\u094d\\u091f\\u093f\\u0902\\u0917', 'ar_SA': '\\u0625\\u0633\\u0642\\u0627\\u0637 \\u0627\\u0644\\u0623\\u0634\\u0639\\u0629', 'fr_FR': 'Lancer de rayons'}, 'Residues': {'en_US': 'Residues', 'zh_CN': '\\u6b8b\\u57fa', 'es_LA': 'Residuos', 'hi_IN': '\\u0905\\u0935\\u0936\\u0947\\u0937', 'ar_SA': '\\u062b\\u0645\\u0627\\u0644\\u0627\\u062a', 'fr_FR': 'R\\u00e9sidus'}, 'Resize': {'en_US': 'Resize', 'zh_CN': '\\u8c03\\u6574\\u5c3a\\u5bf8', 'es_LA': 'Redimensionar', 'hi_IN': '\\u0906\\u0915\\u093e\\u0930 \\u092c\\u0926\\u0932\\u0947\\u0902', 'ar_SA': '\\u062a\\u063a\\u064a\\u064a\\u0631 \\u0627\\u0644\\u062d\\u062c\\u0645', 'fr_FR': 'Redimensionner'}, 'Ring Fill': {'en_US': 'Ring Fill', 'zh_CN': '\\u73af\\u586b\\u5145', 'es_LA': 'Relleno de anillos', 'hi_IN': '\\u0930\\u093f\\u0902\\u0917 \\u092d\\u0930\\u0947\\u0902', 'ar_SA': '\\u0645\\u0644\\u0621 \\u0627\\u0644\\u062d\\u0644\\u0642\\u0627\\u062a', 'fr_FR': 'Remplissage cycles'}, 'Rotate model': {'en_US': 'Rotate model', 'zh_CN': '\\u65cb\\u8f6c\\u6a21\\u578b', 'es_LA': 'Rotar modelo', 'hi_IN': '\\u092e\\u0949\\u0921\\u0932 \\u0918\\u0941\\u092e\\u093e\\u090f\\u0902', 'ar_SA': '\\u062a\\u062f\\u0648\\u064a\\u0631 \\u0627\\u0644\\u0646\\u0645\\u0648\\u0630\\u062c', 'fr_FR': 'Pivoter mod\\u00e8le'}, 'Rotate slab': {'en_US': 'Rotate slab', 'zh_CN': '\\u65cb\\u8f6c\\u539a\\u677f', 'es_LA': 'Rotar placa', 'hi_IN': '\\u0938\\u094d\\u0932\\u0948\\u092c \\u0918\\u0941\\u092e\\u093e\\u090f\\u0902', 'ar_SA': '\\u062a\\u062f\\u0648\\u064a\\u0631 \\u0627\\u0644\\u0634\\u0631\\u064a\\u062d\\u0629', 'fr_FR': 'Pivoter tranche'}, 'Side view': {'en_US': 'Side view', 'zh_CN': '\\u4fa7\\u89c6\\u56fe', 'es_LA': 'Vista lateral', 'hi_IN': '\\u0938\\u093e\\u0907\\u0921 \\u0926\\u0943\\u0936\\u094d\\u092f', 'ar_SA': '\\u0639\\u0631\\u0636 \\u062c\\u0627\\u0646\\u0628\\u064a', 'fr_FR': 'Vue lat\\u00e9rale'}, 'Slab': {'en_US': 'Slab', 'zh_CN': '\\u5207\\u7247\\u539a\\u677f', 'es_LA': 'Placa', 'hi_IN': '\\u0938\\u094d\\u0932\\u0948\\u092c', 'ar_SA': '\\u0634\\u0631\\u064a\\u062d\\u0629', 'fr_FR': 'Tranche'}, 'Smooth': {'en_US': 'Smooth', 'zh_CN': '\\u5e73\\u6ed1', 'es_LA': 'Suave', 'hi_IN': '\\u091a\\u093f\\u0915\\u0928\\u093e', 'ar_SA': '\\u0928\\u093e\\u0639\\u0645', 'fr_FR': 'Lisse'}, 'Step 1': {'en_US': 'Step 1', 'zh_CN': '\\u6b65\\u9aa4 1', 'es_LA': 'Paso 1', 'hi_IN': '\\u091a\\u0930\\u0923 1', 'ar_SA': '\\u0627\\u0644\\u062e\\u0637\\u0648\\u0629 1', 'fr_FR': '\\u00c9tape 1'}, 'Step 2': {'en_US': 'Step 2', 'zh_CN': '\\u6b65\\u9aa4 2', 'es_LA': 'Paso 2', 'hi_IN': '\\u091a\\u0930\\u0923 2', 'ar_SA': '\\u0627\\u0644\\u062e\\u0637\\u0648\\u0629 2', 'fr_FR': '\\u00c9tape 2'}, 'Structure Analysis': {'en_US': 'Structure Analysis', 'zh_CN': '\\u7ed3\\u6784\\u5206\\u6790', 'es_LA': 'An\\u00e1lisis estructural', 'hi_IN': '\\u0938\\u0902\\u0930\\u091a\\u0928\\u093e \\u0935\\u093f\\u0936\\u094d\\u0932\\u0947\\u0937\\u0923', 'ar_SA': '\\u062a\\u062d\\u0644\\u064a\\u0644 \\u0627\\u0644\\u0628\\u0646\\u064a\\u0629', 'fr_FR': 'Analyse structurale'}, 'Structure Editing': {'en_US': 'Structure Editing', 'zh_CN': '\\u7ed3\\u6784\\u7f16\\u8f91', 'es_LA': 'Edici\\u00f3n de estructura', 'hi_IN': '\\u0938\\u0902\\u0930\\u091a\\u0928\\u093e \\u0938\\u0902\\u092a\\u093e\\u0926\\u0928', 'ar_SA': '\\u062a\\u0639\\u062f\\u064a\\u0644 \\u0627\\u0644\\u0628\\u0646\\u064a\\u0629', 'fr_FR': '\\u00c9dition de structure'}, 'Structure Prediction': {'en_US': 'Structure Prediction', 'zh_CN': '\\u7ed3\\u6784\\u9884\\u6d4b', 'es_LA': 'Predicci\\u00f3n de estructura', 'hi_IN': '\\u0938\\u0902\\u0930\\u091a\\u0928\\u093e \\u092d\\u0935\\u093f\\u0937\\u094d\\u092f\\u0935\\u093e\\u0923\\u0940', 'ar_SA': '\\u0627\\u0644\\u062a\\u0646\\u0628\\u0624 \\u0628\\u0627\\u0644\\u0628\\u0646\\u064a\\u0629', 'fr_FR': 'Pr\\u00e9diction structure'}, 'Stubs': {'en_US': 'Stubs', 'zh_CN': '\\u672b\\u7aef\\u77ed\\u67f1', 'es_LA': 'Mu\\u00f1ones', 'hi_IN': '\\u0938\\u094d\\u091f\\u092c\\u094d\\u0938', 'ar_SA': '\\u062c\\u0630\\u0648\\u0639', 'fr_FR': 'Tron\\u00e7ons'}, 'Subtract': {'en_US': 'Subtract', 'zh_CN': '\\u76f8\\u51cf', 'es_LA': 'Restar', 'hi_IN': '\\u0918\\u091f\\u093e\\u090f\\u0902', 'ar_SA': '\\u0637\\u0631\\u062d', 'fr_FR': 'Soustraire'}, 'Swapaa': {'en_US': 'Swapaa', 'zh_CN': '\\u66ff\\u6362\\u6c28\\u57fa\\u9178', 'es_LA': 'Cambiar AA', 'hi_IN': '\\u0905\\u092e\\u0940\\u0928\\u094b \\u090f\\u0938\\u093f\\u0921 \\u092c\\u0926\\u0932\\u0947\\u0902', 'ar_SA': '\\u062a\\u0628\\u062f\\u064a\\u0644 \\u0627\\u0644\\u0623\\u062d\\u0645\\u0627\\u0636 \\u0627\\u0644\\u0623\\u0645\\u064a\\u0646\\u064a\\u0629', 'fr_FR': 'Remplacer AA'}, 'Tape': {'en_US': 'Tape', 'zh_CN': '\\u6241\\u5e26', 'es_LA': 'Cinta plana', 'hi_IN': '\\u091f\\u0947\\u092a', 'ar_SA': '\\u0634\\u0631\\u064a\\u0637', 'fr_FR': 'Bande'}, 'Tilt slab': {'en_US': 'Tilt slab', 'zh_CN': '\\u503e\\u659c\\u539a\\u677f', 'es_LA': 'Inclinar placa', 'hi_IN': '\\u0938\\u094d\\u0932\\u0948\\u092c \\u091d\\u0941\\u0915\\u093e\\u090f\\u0902', 'ar_SA': '\\u0625\\u0645\\u0627\\u0644\\u0629 \\u0627\\u0644\\u0634\\u0631\\u064a\\u062d\\u0629', 'fr_FR': 'Incliner tranche'}, 'Toggle Hand Modes': {'en_US': 'Toggle Hand Modes', 'zh_CN': '\\u5207\\u6362\\u624b\\u90e8\\u6a21\\u5f0f', 'es_LA': 'Alternar modo manual', 'hi_IN': '\\u0939\\u0948\\u0902\\u0921 \\u092e\\u094b\\u0921 \\u091f\\u0949\\u0917\\u0932 \\u0915\\u0930\\u0947\\u0902', 'ar_SA': '\\u062a\\u0628\\u062f\\u064a\\u0644 \\u0623\\u0648\\u0636\\u0627\\u0639 \\u0627\\u0644\\u064a\\u062f', 'fr_FR': 'Basculer modes manuels'}, 'Toggle Mouse Modes': {'en_US': 'Toggle Mouse Modes', 'zh_CN': '\\u5207\\u6362\\u9f20\\u6807\\u6a21\\u5f0f', 'es_LA': 'Alternar modo rat\\u00f3n', 'hi_IN': '\\u092e\\u093e\\u0909\\u0938 \\u092e\\u094b\\u0921 \\u091f\\u0949\\u0917\\u0932 \\u0915\\u0930\\u0947\\u0902', 'ar_SA': '\\u062a\\u0628\\u062f\\u064a\\u0644 \\u0623\\u0648\\u0636\\u0627\\u0639 \\u0627\\u0644\\u0641\\u0623\\u0631\\u0629', 'fr_FR': 'Basculer modes souris'}, 'Translate': {'en_US': 'Translate', 'zh_CN': '\\u5e73\\u79fb', 'es_LA': 'Trasladar', 'hi_IN': '\\u0938\\u094d\\u0925\\u093e\\u0928\\u093e\\u0902\\u0924\\u0930\\u093f\\u0924 \\u0915\\u0930\\u0947\\u0902', 'ar_SA': '\\u0625\\u0632\\u0627\\u062d\\u0629', 'fr_FR': 'Translater'}, 'Transparency': {'en_US': 'Transparency', 'zh_CN': '\\u900f\\u660e\\u5ea6', 'es_LA': 'Transparencia', 'hi_IN': '\\u092a\\u093e\\u0930\\u0926\\u0930\\u094d\\u0936\\u093f\\u0924\\u093e', 'ar_SA': '\\u0627\\u0644\\u0634\\u0641\\u0627\\u0641\\u064a\\u0629', 'fr_FR': 'Transparence'}, 'Transparent surface': {'en_US': 'Transparent surface', 'zh_CN': '\\u900f\\u660e\\u8868\\u9762', 'es_LA': 'Superficie transparente', 'hi_IN': '\\u092a\\u093e\\u0930\\u0926\\u0930\\u094d\\u0936\\u0940 \\u0938\\u0924\\u0939', 'ar_SA': '\\u0633\\u0637\\u062d \\u0634\\u0641\\u0627\\u0641', 'fr_FR': 'Surface transparente'}, 'Tube/ Ellipsoid': {'en_US': 'Tube/ Ellipsoid', 'zh_CN': '\\u7ba1\\u72b6/\\u692d\\u7403', 'es_LA': 'Tubo/Elipsoide', 'hi_IN': '\\u091f\\u094d\\u092f\\u0942\\u092c/\\u0926\\u0940\\u0930\\u094d\\u0918\\u0935\\u0943\\u0924\\u094d\\u0924', 'ar_SA': '\\u0623\\u0646\\u0628\\u0648\\u0628/\\u0642\\u0637\\u0639 \\u0646\\u0627\\u0642\\u0635', 'fr_FR': 'Tube/Ellipso\\u00efde'}, 'Tube/ Muffler': {'en_US': 'Tube/ Muffler', 'zh_CN': '\\u7ba1\\u72b6/\\u5e73\\u622a', 'es_LA': 'Tubo/Silenciador', 'hi_IN': '\\u091f\\u094d\\u092f\\u0942\\u092c/\\u092e\\u092b\\u0932\\u0930', 'ar_SA': '\\u0623\\u0646\\u0628\\u0648\\u0628/\\u0645\\u062e\\u0645\\u062f', 'fr_FR': 'Tube/Manchon'}, 'Tube/ Slab': {'en_US': 'Tube/ Slab', 'zh_CN': '\\u7ba1\\u72b6/\\u539a\\u677f', 'es_LA': 'Tubo/Placa', 'hi_IN': '\\u091f\\u094d\\u092f\\u0942\\u092c/\\u0938\\u094d\\u0932\\u0948\\u092c', 'ar_SA': '\\u0623\\u0646\\u0628\\u0648\\u0628/\\u0634\\u0631\\u064a\\u062d\\u0629', 'fr_FR': 'Tube/Tranche'}, 'Tug': {'en_US': 'Tug', 'zh_CN': '\\u5fae\\u62c9', 'es_LA': 'Tirar', 'hi_IN': '\\u0916\\u0940\\u0902\\u091a\\u0947\\u0902', 'ar_SA': '\\u0633\\u062d\\u0628 \\u062e\\u0641\\u064a\\u0641', 'fr_FR': 'Tirer'}, 'User-Defined Selectors': {'en_US': 'User-Defined Selectors', 'zh_CN': '\\u81ea\\u5b9a\\u4e49\\u9009\\u62e9\\u5668', 'es_LA': 'Selectores personalizados', 'hi_IN': '\\u0909\\u092a\\u092f\\u094b\\u0917\\u0915\\u0930\\u094d\\u0924\\u093e-\\u092a\\u0930\\u093f\\u092d\\u093e\\u0937\\u093f\\u0924 \\u091a\\u092f\\u0928\\u0915\\u0930\\u094d\\u0924\\u093e', 'ar_SA': '\\u0645\\u062d\\u062f\\u062f\\u0627\\u062a \\u0645\\u062e\\u0635\\u0635\\u0629', 'fr_FR': 'S\\u00e9lecteurs personnalis\\u00e9s'}, 'Utilities': {'en_US': 'Utilities', 'zh_CN': '\\u5b9e\\u7528\\u5de5\\u5177', 'es_LA': 'Utilidades', 'hi_IN': '\\u0909\\u092a\\u092f\\u094b\\u0917\\u093f\\u0924\\u093e\\u090f\\u0902', 'ar_SA': '\\u0623\\u062f\\u0648\\u0627\\u062a \\u0645\\u0633\\u0627\\u0639\\u062f\\u0629', 'fr_FR': 'Utilitaires'}, 'Volume Data': {'en_US': 'Volume Data', 'zh_CN': '\\u4f53\\u79ef\\u6570\\u636e', 'es_LA': 'Datos de volumen', 'hi_IN': '\\u0935\\u0949\\u0932\\u094d\\u092f\\u0942\\u092e \\u0921\\u0947\\u091f\\u093e', 'ar_SA': '\\u0628\\u064a\\u0627\\u0646\\u0627\\u062a \\u0627\\u0644\\u062d\\u062c\\u0645', 'fr_FR': 'Donn\\u00e9es volumiques'}, 'Windowing': {'en_US': 'Windowing', 'zh_CN': '\\u7a97\\u53e3\\u5316\\u8c03\\u6574', 'es_LA': 'Ventaneo', 'hi_IN': '\\u0935\\u093f\\u0902\\u0921\\u094b\\u0907\\u0902\\u0917', 'ar_SA': '\\u062a\\u062d\\u062f\\u064a\\u062f \\u0627\\u0644\\u0646\\u0637\\u0627\\u0642', 'fr_FR': 'Fen\\u00eatrage'}, 'XYZ slices': {'en_US': 'XYZ slices', 'zh_CN': 'XYZ \\u5207\\u7247', 'es_LA': 'Cortes XYZ', 'hi_IN': 'XYZ \\u0938\\u094d\\u0932\\u093e\\u0907\\u0938', 'ar_SA': '\\u0634\\u0631\\u0627\\u0626\\u062d XYZ', 'fr_FR': 'Coupes XYZ'}, 'Z-plane': {'en_US': 'Z-plane', 'zh_CN': 'Z \\u5207\\u9762', 'es_LA': 'Plano Z', 'hi_IN': 'Z-\\u0938\\u092e\\u0924\\u0932', 'ar_SA': '\\u0645\\u0633\\u062a\\u0648\\u0649 Z', 'fr_FR': 'Plan Z'}, 'Zone': {'en_US': 'Zone', 'zh_CN': '\\u90bb\\u8fd1\\u533a\\u57df', 'es_LA': 'Zona', 'hi_IN': '\\u091c\\u093c\\u094b\\u0928', 'ar_SA': '\\u0645\\u0646\\u0637\\u0642\\u0629', 'fr_FR': 'Zone'}, 'b-factor': {'en_US': 'b-factor', 'zh_CN': 'B \\u56e0\\u5b50', 'es_LA': 'Factor B', 'hi_IN': '\\u092c\\u0940-\\u092b\\u0948\\u0915\\u094d\\u091f\\u0930', 'ar_SA': '\\u0639\\u0627\\u0645\\u0644 B', 'fr_FR': 'Facteur B'}, 'chain': {'en_US': 'chain', 'zh_CN': '\\u94fe', 'es_LA': 'Cadena', 'hi_IN': '\\u0936\\u094d\\u0930\\u0943\\u0902\\u0916\\u0932\\u093e', 'ar_SA': '\\u0633\\u0644\\u0633\\u0644\\u0629', 'fr_FR': 'Cha\\u00eene'}, 'electrostatic': {'en_US': 'electrostatic', 'zh_CN': '\\u9759\\u7535\\u52bf', 'es_LA': 'Electrost\\u00e1tico', 'hi_IN': '\\u0907\\u0932\\u0947\\u0915\\u094d\\u091f\\u094d\\u0930\\u094b\\u0938\\u094d\\u091f\\u0948\\u091f\\u093f\\u0915', 'ar_SA': '\\u0643\\u0647\\u0631\\u0648\\u0633\\u062a\\u0627\\u062a\\u064a\\u0643\\u064a', 'fr_FR': '\\u00c9lectrostatique'}, 'heteroatom': {'en_US': 'heteroatom', 'zh_CN': '\\u6742\\u539f\\u5b50', 'es_LA': 'Hetero\\u00e1tomo', 'hi_IN': '\\u0939\\u0947\\u091f\\u0930\\u094b\\u090f\\u091f\\u092e', 'ar_SA': '\\u0630\\u0631\\u0629 \\u063a\\u064a\\u0631 \\u0645\\u062a\\u062c\\u0627\\u0646\\u0633\\u0629', 'fr_FR': 'H\\u00e9t\\u00e9roatome'}, 'hydrophobic': {'en_US': 'hydrophobic', 'zh_CN': '\\u758f\\u6c34\\u6027', 'es_LA': 'Hidrof\\u00f3bico', 'hi_IN': '\\u0939\\u093e\\u0907\\u0921\\u094d\\u0930\\u094b\\u092b\\u094b\\u092c\\u093f\\u0915', 'ar_SA': '\\u0643\\u0627\\u0631\\u0647 \\u0644\\u0644\\u0645\\u0627\\u0621', 'fr_FR': 'Hydrophobe'}, 'image': {'en_US': 'image', 'zh_CN': '\\u56fe\\u50cf', 'es_LA': 'Imagen', 'hi_IN': '\\u091b\\u0935\\u093f', 'ar_SA': '\\u0635\\u0648\\u0631\\u0629', 'fr_FR': 'Image'}, 'mesh': {'en_US': 'mesh', 'zh_CN': '\\u7f51\\u683c', 'es_LA': 'Malla', 'hi_IN': '\\u091c\\u093e\\u0932\\u0940', 'ar_SA': '\\u0634\\u0628\\u0643\\u0629', 'fr_FR': 'Maillage'}, 'nucleotide': {'en_US': 'nucleotide', 'zh_CN': '\\u6838\\u82f7\\u9178', 'es_LA': 'Nucle\\u00f3tido', 'hi_IN': '\\u0928\\u094d\\u092f\\u0942\\u0915\\u094d\\u0932\\u093f\\u092f\\u094b\\u091f\\u093e\\u0907\\u0921', 'ar_SA': '\\u0646\\u0648\\u0643\\u0644\\u064a\\u0648\\u062a\\u064a\\u062f', 'fr_FR': 'Nucl\\u00e9otide'}, 'polymer': {'en_US': 'polymer', 'zh_CN': '\\u805a\\u5408\\u7269', 'es_LA': 'Pol\\u00edmero', 'hi_IN': '\\u092a\\u0949\\u0932\\u093f\\u092e\\u0930', 'ar_SA': '\\u0628\\u0648\\u0644\\u064a\\u0645\\u0631', 'fr_FR': 'Polym\\u00e8re'}, 'rainbow': {'en_US': 'rainbow', 'zh_CN': '\\u5f69\\u8679\\u6e10\\u53d8', 'es_LA': 'Arco\\u00edris', 'hi_IN': '\\u0907\\u0902\\u0926\\u094d\\u0930\\u0927\\u0928\\u0941\\u0937', 'ar_SA': '\\u0642\\u0648\\u0633 \\u0642\\u0632\\u062d', 'fr_FR': 'Arc-en-ciel'}, 'surface': {'en_US': 'surface', 'zh_CN': '\\u8868\\u9762', 'es_LA': 'Superficie', 'hi_IN': '\\u0938\\u0924\\u0939', 'ar_SA': '\\u0633\\u0637\\u062d', 'fr_FR': 'Surface'}, '&Amine': {'en_US': 'Amine', 'zh_CN': '\\u80fa', 'es_LA': 'Amina', 'hi_IN': '\\u0905\\u092e\\u093e\\u0907\\u0928', 'ar_SA': '\\u0623\\u0645\\u064a\\u0646', 'fr_FR': 'Amine'}, '&Chains': {'en_US': 'Chains', 'zh_CN': '\\u94fe', 'es_LA': 'Cadenas', 'hi_IN': '\\u0936\\u094d\\u0930\\u0943\\u0902\\u0916\\u0932\\u093e\\u090f\\u0902', 'ar_SA': '\\u0633\\u0644\\u0627\\u0633\\u0644', 'fr_FR': 'Cha\\u00eenes'}, '&Element': {'en_US': 'Element', 'zh_CN': '\\u5143\\u7d20', 'es_LA': 'Elemento', 'hi_IN': '\\u0924\\u0924\\u094d\\u0935', 'ar_SA': '\\u0639\\u0646\\u0635\\u0631', 'fr_FR': '\\u00c9l\\u00e9ment'}, '&Functional Group': {'en_US': 'Functional Group', 'zh_CN': '\\u5b98\\u80fd\\u56e2', 'es_LA': 'Grupo funcional', 'hi_IN': '\\u0915\\u093e\\u0930\\u094d\\u092f\\u093e\\u0924\\u094d\\u092e\\u0915 \\u0938\\u092e\\u0942\\u0939', 'ar_SA': '\\u0645\\u062c\\u0645\\u0648\\u0639\\u0629 \\u0648\\u0638\\u064a\\u0641\\u064a\\u0629', 'fr_FR': 'Groupe fonctionnel'}, '&IDATM Type': {'en_US': 'IDATM Type', 'zh_CN': 'IDATM \\u7c7b\\u578b', 'es_LA': 'Tipo IDATM', 'hi_IN': 'IDATM \\u092a\\u094d\\u0930\\u0915\\u093e\\u0930', 'ar_SA': '\\u0646\\u0648\\u0639 IDATM', 'fr_FR': 'Type IDATM'}, '&Nucleoside Base': {'en_US': 'Nucleoside Base', 'zh_CN': '\\u6838\\u82f7\\u78b1\\u57fa', 'es_LA': 'Base nucle\\u00f3sida', 'hi_IN': '\\u0928\\u094d\\u092f\\u0942\\u0915\\u094d\\u0932\\u093f\\u092f\\u094b\\u0938\\u093e\\u0907\\u0921 \\u092c\\u0947\\u0938', 'ar_SA': '\\u0642\\u0627\\u0639\\u062f\\u0629 \\u0646\\u0648\\u0643\\u0644\\u064a\\u0648\\u0633\\u064a\\u062f', 'fr_FR': 'Base nucl\\u00e9oside'}, '&Residues': {'en_US': 'Residues', 'zh_CN': '\\u6b8b\\u57fa', 'es_LA': 'Residuos', 'hi_IN': '\\u0905\\u0935\\u0936\\u0947\\u0937', 'ar_SA': '\\u062b\\u0645\\u0627\\u0644\\u0627\\u062a', 'fr_FR': 'R\\u00e9sidus'}, '&Secondary Structure': {'en_US': 'Secondary Structure', 'zh_CN': '\\u4e8c\\u7ea7\\u7ed3\\u6784', 'es_LA': 'Estructura secundaria', 'hi_IN': '\\u0926\\u094d\\u0935\\u093f\\u0924\\u0940\\u092f\\u0915 \\u0938\\u0902\\u0930\\u091a\\u0928\\u093e', 'ar_SA': '\\u0628\\u0646\\u064a\\u0629 \\u062b\\u0627\\u0646\\u0648\\u064a\\u0629', 'fr_FR': 'Structure secondaire'}, '&Structure': {'en_US': 'Structure', 'zh_CN': '\\u7ed3\\u6784', 'es_LA': 'Estructura', 'hi_IN': '\\u0938\\u0902\\u0930\\u091a\\u0928\\u093e', 'ar_SA': '\\u0628\\u0646\\u064a\\u0629', 'fr_FR': 'Structure'}, 'Che&mistry': {'en_US': 'Chemistry', 'zh_CN': '\\u5316\\u5b66', 'es_LA': 'Qu\\u00edmica', 'hi_IN': '\\u0930\\u0938\\u093e\\u092f\\u0928 \\u0935\\u093f\\u091c\\u094d\\u091e\\u093e\\u0928', 'ar_SA': '\\u0643\\u064a\\u0645\\u064a\\u0627\\u0621', 'fr_FR': 'Chimie'}, 'Select Language': {'en_US': 'Select Language', 'zh_CN': '\\u9009\\u62e9\\u8bed\\u8a00', 'es_LA': 'Seleccionar Idioma', 'hi_IN': '\\u092d\\u093e\\u0937\\u093e \\u091a\\u0941\\u0928\\u0947\\u0902', 'ar_SA': '\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0644\\u063a\\u0629', 'fr_FR': 'Choisir la langue'}, 'Choose your interface language': {'en_US': 'Choose your interface language', 'zh_CN': '\\u8bf7\\u9009\\u62e9\\u754c\\u9762\\u8bed\\u8a00', 'es_LA': 'Elige el idioma de la interfaz', 'hi_IN': '\\u0907\\u0902\\u091f\\u0930\\u092b\\u093c\\u0947\\u0938 \\u092d\\u093e\\u0937\\u093e \\u091a\\u0941\\u0928\\u0947\\u0902', 'ar_SA': '\\u0627\\u062e\\u062a\\u0631 \\u0644\\u063a\\u0629 \\u0627\\u0644\\u0648\\u0627\\u062c\\u0647\\u0629', 'fr_FR': "Choisissez la langue de l'interface"}, 'Language': {'en_US': 'Language', 'zh_CN': '\\u8bed\\u8a00', 'es_LA': 'Idioma', 'hi_IN': '\\u092d\\u093e\\u0937\\u093e', 'ar_SA': '\\u0627\\u0644\\u0644\\u063a\\u0629', 'fr_FR': 'Langue'}, 'English (US)': {'en_US': 'English (US)', 'zh_CN': '\\u82f1\\u8bed (\\u7f8e\\u56fd)', 'es_LA': 'Ingl\\u00e9s (EE.UU.)', 'hi_IN': '\\u0905\\u0902\\u0917\\u094d\\u0930\\u0947\\u091c\\u093c\\u0940 (\\u092f\\u0942.\\u090f\\u0938.)', 'ar_SA': '\\u0627\\u0644\\u0625\\u0646\\u062c\\u0644\\u064a\\u0632\\u064a\\u0629 (\\u0627\\u0644\\u0648\\u0644\\u0627\\u064a\\u0627\\u062a \\u0627\\u0644\\u0645\\u062a\\u062d\\u062f\\u0629)', 'fr_FR': 'Anglais (\\u00c9.-U.)'}, 'Espa\\u00f1ol (Latino)': {'en_US': 'Spanish (Latin America)', 'zh_CN': '\\u897f\\u73ed\\u7259\\u8bed (\\u62c9\\u7f8e)', 'es_LA': 'Espa\\u00f1ol (Latino)', 'hi_IN': '\\u0938\\u094d\\u092a\\u0948\\u0928\\u093f\\u0936 (\\u0932\\u0948\\u091f\\u093f\\u0928)', 'ar_SA': '\\u0627\\u0644\\u0625\\u0633\\u0628\\u0627\\u0646\\u064a\\u0629 (\\u0627\\u0644\\u0644\\u0627\\u062a\\u064a\\u0646\\u064a\\u0629)', 'fr_FR': 'Espagnol (Latino)'}, '\\u4e2d\\u6587 (Mandarin)': {'en_US': 'Chinese (Simplified)', 'zh_CN': '\\u4e2d\\u6587 (\\u7b80\\u4f53)', 'es_LA': 'Chino Mandar\\u00edn', 'hi_IN': '\\u091a\\u0940\\u0928\\u0940 (\\u092e\\u0902\\u0926\\u093e\\u0930\\u093f\\u0928)', 'ar_SA': '\\u0627\\u0644\\u0635\\u064a\\u0646\\u064a\\u0629 (\\u0627\\u0644\\u0645\\u0627\\u0646\\u062f\\u0631\\u064a\\u0646)', 'fr_FR': 'Chinois (Mandarin)'}, '\\u0939\\u093f\\u0928\\u094d\\u0926\\u0940 (Hindi)': {'en_US': 'Hindi', 'zh_CN': '\\u5370\\u5730\\u8bed', 'es_LA': 'Hindi', 'hi_IN': '\\u0939\\u093f\\u0928\\u094d\\u0926\\u0940', 'ar_SA': '\\u0627\\u0644\\u0647\\u0646\\u062f\\u064a\\u0629', 'fr_FR': 'Hindi'}, '\\u0627\\u0644\\u0639\\u0631\\u0628\\u064a\\u0629 (Arabic)': {'en_US': 'Arabic', 'zh_CN': '\\u963f\\u62c9\\u4f2f\\u8bed', 'es_LA': '\\u00c1rabe', 'hi_IN': '\\u0905\\u0930\\u092c\\u0940', 'ar_SA': '\\u0627\\u0644\\u0639\\u0631\\u0628\\u064a\\u0629', 'fr_FR': 'Arabe'}, 'Fran\\u00e7ais (French)': {'en_US': 'French', 'zh_CN': '\\u6cd5\\u8bed', 'es_LA': 'Franc\\u00e9s', 'hi_IN': '\\u092b\\u093c\\u094d\\u0930\\u0947\\u0902\\u091a', 'ar_SA': '\\u0627\\u0644\\u0641\\u0631\\u0646\\u0633\\u064a\\u0629', 'fr_FR': 'Fran\\u00e7ais'}}
+def _clean_key(text):
+    if not text:
+        return ""
+    s = text.replace("&", "").strip()
+    return " ".join(s.split())
+def _tr(text, lang=None):
+    if not text:
+        return text
+    if lang is None:
+        lang = get_current_language()
+    if lang == "en_US":
+        return text
+    k = _clean_key(text)
+    entry = _TRANSLATION_TABLE.get(k)
+    if not entry:
+        entry = _TRANSLATION_TABLE.get(text)
+    if entry and lang in entry:
+        val = entry[lang]
+        if chr(92) in val:
+            try:
+                val = val.encode("utf-8").decode("unicode_escape")
+            except Exception:
+                pass
+        return val
+    return text
+def _split_title_lines(title):
+    words = title.split()
+    if len(words) <= 1:
+        return title
+    mid = len(words) // 2
+    return " ".join(words[:mid]) + "\n" + " ".join(words[mid:])
+def apply_language(session, lang_code=None):
+    global _CURRENT_LANG
+    if lang_code is not None:
+        _CURRENT_LANG = lang_code
+        _save_language_to_disk(lang_code)
+    cur_lang = get_current_language()
+    app = QtWidgets.QApplication.instance()
+    if not app:
+        return
+    mw = None
+    if session and hasattr(session, "ui") and hasattr(session.ui, "main_window"):
+        mw = session.ui.main_window
+    elif hasattr(app, "activeWindow") and app.activeWindow():
+        mw = app.activeWindow()
+    if mw:
+        for tw in mw.findChildren(QtWidgets.QTabWidget):
+            for i in range(tw.count()):
+                orig = getattr(tw, f"_orig_tab_{i}", None)
+                if orig is None:
+                    orig = tw.tabText(i)
+                    setattr(tw, f"_orig_tab_{i}", orig)
+                tw.setTabText(i, _tr(orig, cur_lang))
+        for btn in mw.findChildren(QtWidgets.QToolButton):
+            orig = getattr(btn, "_orig_text", None)
+            if orig is None:
+                orig = btn.text()
+                setattr(btn, "_orig_text", orig)
+            if orig:
+                tr_txt = _tr(orig, cur_lang)
+                if "\n" in orig:
+                    tr_txt = _split_title_lines(tr_txt)
+                btn.setText(tr_txt)
+                act = btn.defaultAction()
+                if act:
+                    orig_act = getattr(act, "_orig_text", None)
+                    if orig_act is None:
+                        orig_act = act.text()
+                        setattr(act, "_orig_text", orig_act)
+                    act.setText(tr_txt)
+            orig_tip = getattr(btn, "_orig_tip", None)
+            if orig_tip is None:
+                orig_tip = btn.toolTip()
+                setattr(btn, "_orig_tip", orig_tip)
+            if orig_tip:
+                btn.setToolTip(_tr(orig_tip, cur_lang))
+        mb = mw.menuBar() if hasattr(mw, "menuBar") else None
+        if mb:
+            for act in mb.actions():
+                orig = getattr(act, "_orig_text", None)
+                if orig is None:
+                    orig = act.text()
+                    setattr(act, "_orig_text", orig)
+                if orig:
+                    act.setText(_tr(orig, cur_lang))
+                menu = act.menu()
+                if menu:
+                    for sub_act in menu.actions():
+                        sub_orig = getattr(sub_act, "_orig_text", None)
+                        if sub_orig is None:
+                            sub_orig = sub_act.text()
+                            setattr(sub_act, "_orig_text", sub_orig)
+                        if sub_orig:
+                            sub_act.setText(_tr(sub_orig, cur_lang))
+        hdr = getattr(mw, "_mac_window_header", None)
+        if hdr and hasattr(hdr, "refresh_language"):
+            hdr.refresh_language()
+        if hasattr(mw, "rapid_access") and mw.rapid_access:
+            hero = getattr(mw.rapid_access, "_mac_hero_widget", None)
+            if hero:
+                hero.update()
+        mw.update()
 _THEME_PALETTES = {
     "gray": {
         "win_bg": "#D5DBE5",
@@ -556,6 +702,10 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         self._curtain = None
         self._msg_font = QtGui.QFont("Segoe UI", 10)
         self._msg_font.setWeight(QtGui.QFont.Weight.Medium)
+        self._showing_lang_selector = False
+        self._lang_container = QtWidgets.QWidget(self)
+        self._lang_container.hide()
+        self._init_lang_selector()
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(15)
         self._timer.timeout.connect(self._on_tick)
@@ -568,10 +718,121 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         if self._curtain is None or self._curtain.parentWidget() is not win:
             self._curtain = MacInternalCurtain(win, self)
         return self._curtain
+    def _init_lang_selector(self):
+        layout = QtWidgets.QVBoxLayout(self._lang_container)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(14)
+        lt_str = "Select Language  \u2022  Seleccionar Idioma"
+        if chr(92) in lt_str:
+            try:
+                lt_str = lt_str.encode("utf-8").decode("unicode_escape")
+            except Exception:
+                pass
+        self._lang_title = QtWidgets.QLabel(lt_str, self._lang_container)
+        self._lang_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._lang_title)
+        self._lang_sub = QtWidgets.QLabel("Choose your interface language / Elige el idioma de la interfaz", self._lang_container)
+        self._lang_sub.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._lang_sub)
+        layout.addSpacing(6)
+        grid = QtWidgets.QGridLayout()
+        grid.setSpacing(12)
+        langs = [
+            ("English (US)", "en_US"),
+            ("\u4e2d\u6587 (Mandar\u00edn)", "zh_CN"),
+            ("Espa\u00f1ol (Latino)", "es_LA"),
+            ("\u0939\u093f\u0928\u094d\u0926\u0940 (Hindi)", "hi_IN"),
+            ("\u0627\u0644\u0639\u0631\u0628\u064a\u0629 (\u00c1rabe)", "ar_SA"),
+            ("Fran\u00e7ais (Franc\u00e9s)", "fr_FR"),
+        ]
+        self._lang_buttons = []
+        for idx, (label, code) in enumerate(langs):
+            row = idx // 2
+            col = idx % 2
+            lbl_txt = label
+            if chr(92) in lbl_txt:
+                try:
+                    lbl_txt = lbl_txt.encode("utf-8").decode("unicode_escape")
+                except Exception:
+                    pass
+            btn = QtWidgets.QPushButton(lbl_txt, self._lang_container)
+            btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(44)
+            btn.clicked.connect(lambda chk=False, c=code: self._on_language_picked(c))
+            grid.addWidget(btn, row, col)
+            self._lang_buttons.append(btn)
+        layout.addLayout(grid)
+        layout.addStretch()
+    def _refresh_lang_styles(self):
+        is_dark = get_current_mode() == "dark"
+        title_color = "#F5F5F7" if is_dark else "#1D1D1F"
+        sub_color = "#8E94A0" if is_dark else "#5A6270"
+        self._lang_title.setStyleSheet(f"color: {title_color}; font-size: 17px; font-weight: 700; background: transparent; border: none;")
+        self._lang_sub.setStyleSheet(f"color: {sub_color}; font-size: 11px; background: transparent; border: none;")
+        btn_qss = (
+            "QPushButton { background-color: #32343C; border: 1.5px solid #444752; border-radius: 12px; color: #F5F5F7; font-size: 13px; font-weight: 600; padding: 6px 14px; }"
+            "QPushButton:hover { background-color: #0A84FF; border-color: #0A84FF; color: #FFFFFF; }"
+            "QPushButton:pressed { background-color: #0066CC; }"
+        ) if is_dark else (
+            "QPushButton { background-color: #ECEFF5; border: 1.5px solid #AEB9CC; border-radius: 12px; color: #1D1D1F; font-size: 13px; font-weight: 600; padding: 6px 14px; }"
+            "QPushButton:hover { background-color: #0066CC; border-color: #0066CC; color: #FFFFFF; }"
+            "QPushButton:pressed { background-color: #004C99; }"
+        )
+        for b in self._lang_buttons:
+            b.setStyleSheet(btn_qss)
+    def _position_lang_container(self):
+        wi = max(1, self.width())
+        hi = max(1, self.height())
+        w = float(wi)
+        h = float(hi)
+        cw = min(680.0, max(500.0, w * 0.58))
+        ch = min(460.0, max(340.0, h * 0.62))
+        cx = w * 0.5
+        cy = h * 0.5
+        card_left = int(cx - cw * 0.5)
+        card_top = int(cy - ch * 0.5)
+        self._lang_container.setGeometry(card_left + 16, card_top + 16, int(cw) - 32, int(ch) - 32)
+    def _on_language_picked(self, code):
+        _save_language_to_disk(code)
+        apply_language(self._session, code)
+        self._showing_lang_selector = False
+        self._lang_container.hide()
+        self._hide_all()
+    def start_language_selection(self, session=None):
+        self._session = session
+        self._kind = "language"
+        self._showing_lang_selector = True
+        self._progress = 1.0
+        self._done_since_t = None
+        self._static_key = None
+        self._static_pixmap = None
+        self._sync_geometry()
+        self._position_lang_container()
+        self._refresh_lang_styles()
+        wi = max(1, self.width())
+        hi = max(1, self.height())
+        self._ensure_static_cache(wi, hi, get_current_mode() == "dark")
+        curt = self._ensure_curtain()
+        if curt is not None:
+            curt.sync_to_parent()
+            curt.show()
+            curt.raise_()
+        self.setWindowOpacity(1.0)
+        self.show()
+        apply_win11_rounded_corners(self)
+        self._lang_container.show()
+        self._lang_container.raise_()
+        self.raise_()
+        self.repaint()
+        if not self._timer.isActive():
+            self._timer.start()
     def _hide_all(self):
         self._timer.stop()
         self._pending_callbacks.clear()
         self._last_hide_t = time.perf_counter()
+        self._showing_lang_selector = False
+        if hasattr(self, "_lang_container"):
+            self._lang_container.hide()
         if self._curtain is not None:
             try:
                 self._curtain.hide()
@@ -663,6 +924,8 @@ class MacLoadingOverlay(QtWidgets.QWidget):
                 self.setGeometry(geo)
             if self._curtain is not None and self._curtain.isVisible():
                 self._curtain.sync_to_parent()
+        if self._showing_lang_selector:
+            self._position_lang_container()
         else:
             scr = QtGui.QGuiApplication.primaryScreen()
             if scr:
@@ -738,7 +1001,19 @@ class MacLoadingOverlay(QtWidgets.QWidget):
                 self._progress = min(1.0, self._progress + dt * 3.2)
                 if self._progress >= 0.995:
                     self._progress = 1.0
-                    self._done_since_t = now
+                    if self._kind == "startup" and _load_saved_language() is None:
+                        if not self._showing_lang_selector:
+                            self._showing_lang_selector = True
+                            self._static_key = None
+                            self._static_pixmap = None
+                            self._position_lang_container()
+                            self._refresh_lang_styles()
+                            self._lang_container.show()
+                            self._lang_container.raise_()
+                            self.update()
+                            return
+                    else:
+                        self._done_since_t = now
             else:
                 if base_prog > self._progress:
                     self._progress = base_prog
@@ -828,6 +1103,10 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         cpen.setWidthF(1.2)
         p.setPen(cpen)
         p.drawPath(card_path)
+        if self._showing_lang_selector:
+            p.end()
+            self._static_pixmap = pix
+            return
         rad = min(cw, ch) * 0.195
         tx = card_rect.left() + cw * 0.48
         ty = card_rect.top() + ch * 0.44
@@ -884,6 +1163,9 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
         painter.drawPixmap(0, 0, self._static_pixmap)
+        if self._showing_lang_selector:
+            painter.end()
+            return
         w = float(wi)
         h = float(hi)
         cw = min(680.0, max(500.0, w * 0.58))
@@ -969,6 +1251,15 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         painter.drawText(text_rect, QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter, left_msg)
         painter.drawText(text_rect, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter, right_msg)
         painter.end()
+def open_language_selector(session=None):
+    app = QtWidgets.QApplication.instance()
+    if not app:
+        return
+    ov = getattr(app, "_mac_loading_overlay", None)
+    if ov is None or type(ov).__name__ != "MacLoadingOverlay":
+        ov = MacLoadingOverlay()
+        app._mac_loading_overlay = ov
+    ov.start_language_selection(session=session)
 def show_mac_loading(session=None, kind="startup", label="", action_callback=None):
     app = QtWidgets.QApplication.instance()
     if not app:
@@ -1111,7 +1402,16 @@ class MacWindowHeader(QtWidgets.QWidget):
             mb.clicked.connect(_on_mode_click)
             layout.addWidget(mb)
             self._mode_btns[mode_key] = mb
+        self._lang_btn = QtWidgets.QPushButton(self)
+        self._lang_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self._lang_btn.setFixedHeight(20)
+        def _on_lang_btn_click():
+            ses = self._session_getter() if self._session_getter else None
+            open_language_selector(ses)
+        self._lang_btn.clicked.connect(_on_lang_btn_click)
+        layout.addWidget(self._lang_btn)
         self.refresh_theme()
+        self.refresh_language()
     def refresh_theme(self):
         pal = get_palette_dict()
         self.setStyleSheet(f"background-color: {pal['win_bg']}; border: none;")
@@ -1127,6 +1427,20 @@ class MacWindowHeader(QtWidgets.QWidget):
                     f"QPushButton {{ background-color: {pal['btn_bg']}; color: {pal['text']}; border: 1px solid {pal['border']}; border-radius: 9px; padding: 1px 10px; font-size: 10px; font-weight: 500; }}"
                     f"QPushButton:hover {{ background-color: {pal['btn_hover']}; }}"
                 )
+        if hasattr(self, "_lang_btn"):
+            self._lang_btn.setStyleSheet(
+                f"QPushButton {{ background-color: {pal['btn_bg']}; color: {pal['text']}; border: 1px solid {pal['border']}; border-radius: 9px; padding: 1px 8px; font-size: 10px; font-weight: 600; }}"
+                f"QPushButton:hover {{ background-color: {pal['btn_hover']}; border-color: {pal['accent']}; }}"
+            )
+    def refresh_language(self):
+        cur_l = get_current_language()
+        badge_map = {"en_US": "EN", "zh_CN": "ZH", "es_LA": "ES", "hi_IN": "HI", "ar_SA": "AR", "fr_FR": "FR"}
+        badge = badge_map.get(cur_l, "ES")
+        if hasattr(self, "_lang_btn"):
+            self._lang_btn.setText(badge)
+        for m_key, btn in self._mode_btns.items():
+            raw_text = "Gris" if m_key == "gray" else "Oscuro"
+            btn.setText(_tr(raw_text, cur_l))
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.MouseButton.LeftButton:
             wh = self.win.windowHandle()
@@ -2104,7 +2418,7 @@ class MacRapidAccessHero(QtWidgets.QWidget):
         painter.setFont(link_font)
         painter.setPen(QtGui.QColor(accent_col))
         fm = QtGui.QFontMetricsF(link_font)
-        txt = "Get started"
+        txt = _tr("Get started")
         tw = fm.horizontalAdvance(txt)
         th = fm.height()
         self._link_rect = QtCore.QRectF(w * 0.5 - tw * 0.5 - 12.0, h * 0.64 - th * 0.5 - 6.0, tw + 24.0, th + 12.0)
@@ -2696,6 +3010,7 @@ def apply_theme(session=None, mode=None, force_bg=True):
     apply_light_to_sideview_and_sequences(session)
     configure_3d_canvas(session, recolor=False, force=force_bg)
     install_viewport_rounded_frame(session)
+    apply_language(session)
     if session and hasattr(session, "ui") and hasattr(session.ui, "main_window"):
         mw = session.ui.main_window
         if mw and hasattr(mw, "rapid_access") and mw.rapid_access:
@@ -2785,6 +3100,12 @@ def reload_theme_from_disk(session=None, mode=None):
 def liquidglass_cmd(session, mode=None):
     if mode and mode.lower() in ("off", "disable", "reset", "default"):
         remove_theme(session)
+    elif mode and mode.lower() in ("lang", "language", "idioma"):
+        open_language_selector(session)
+    elif mode and mode.lower() in ("en", "es", "zh", "hi", "ar", "fr", "en_us", "zh_cn", "es_la", "hi_in", "ar_sa", "fr_fr"):
+        code_map = {"en": "en_US", "es": "es_LA", "zh": "zh_CN", "hi": "hi_IN", "ar": "ar_SA", "fr": "fr_FR"}
+        c = code_map.get(mode.lower(), mode)
+        apply_language(session, c)
     else:
         reload_theme_from_disk(session, mode=mode)
 try:
