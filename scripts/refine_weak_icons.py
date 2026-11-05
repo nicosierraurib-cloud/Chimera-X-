@@ -670,6 +670,5 @@ def main():
                     with open(os.path.join(root, f), "w", encoding="utf-8") as fp:
                         fp.write(generated_svg_text[f])
                     replaced_in_trees += 1
-    print("Upgraded icons:", len(GENERATORS), "tree replacements:", replaced_in_trees)
 if __name__ == "__main__":
     main()

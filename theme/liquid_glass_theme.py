@@ -2401,10 +2401,7 @@ def liquidglass_cmd(session, mode=None):
     else:
         reload_theme_from_disk(session, mode=mode)
 try:
-    cmd_desc = CmdDesc(
-        optional=[("mode", StringArg)],
-        synopsis="macOS Sequoia Gray & Dark Pro Mode"
-    )
+    cmd_desc = CmdDesc(optional=[("mode", StringArg)])
     register("liquidglass", cmd_desc, liquidglass_cmd)
 except Exception:
     pass

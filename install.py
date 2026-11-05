@@ -57,8 +57,5 @@ def main():
             f.write(pth_line)
         if os.path.exists(pkg_src):
             copy_directory_files(pkg_src, os.path.join(sp, "chimerax"), (".png", ".svg"))
-    print(f"Installed theme to: {dst_theme}")
-    print(f"Installed icons to: {icons_dest_primary}")
-    print(f"Configured site-packages: {len(site_packages_list)}")
 if __name__ == "__main__":
     main()

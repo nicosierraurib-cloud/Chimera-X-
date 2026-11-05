@@ -1,7 +1,3 @@
-"""
-Generador de archivos vectoriales SVG puros con colores pasteles
-para el repositorio Chimera-X-
-"""
 import os
 SVG_DIR = r"C:\Users\Parfion\Documents\GitHub\Chimera-X-\svg"
 os.makedirs(SVG_DIR, exist_ok=True)
@@ -104,4 +100,3 @@ for name, svg_text in SVG_TEMPLATES.items():
     p = os.path.join(SVG_DIR, name)
     with open(p, "w", encoding="utf-8") as f:
         f.write(svg_text)
-print(f"Generados {len(SVG_TEMPLATES)} archivos SVG vectoriales puros en {SVG_DIR}.")

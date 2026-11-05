@@ -1,12 +1,3 @@
-"""
-Generador Maestro Vectorial de Iconos Pastel para UCSF ChimeraX
-================================================================
-- Rediseo individual de cada PNG/imagen en ChimeraX (sin iconos repetidos).
-- Geometra vectorial pura y minimalista (estilo Apple SF Symbols).
-- Paleta moderna con colores pasteles suaves y elegantes.
-- Exportacin simultnea a PNG Retina (128x128 anti-aliased) y SVG vectorial.
-- Distribucin automtica a descargas, instalacin local y repositorio GitHub.
-"""
 import os
 import math
 from PIL import Image, ImageDraw, ImageFont
@@ -725,10 +716,8 @@ ICON_BUILDERS = {
     "mac_zoom.png": (lambda: base_gen.draw_traffic_light(PASTEL_MINT), []),
     "mac_zoom_hover.png": (lambda: base_gen.draw_traffic_light((52, 199, 89, 255), "+"), []),
 }
-print(f"Iniciando generacion de {len(ICON_BUILDERS)} iconos pastel...")
 count = 0
 for fname, (fn, subdirs) in ICON_BUILDERS.items():
     im = fn()
     save_image(im, fname, subdirs)
     count += 1
-print(f"Generacion completada con exito: {count} iconos distribuidos.")
