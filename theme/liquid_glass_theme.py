@@ -472,6 +472,29 @@ class MacWindowResizeFilter(QtCore.QObject):
             self.win.setCursor(QtCore.Qt.CursorShape.SizeHorCursor)
         elif is_t or is_b:
             self.win.setCursor(QtCore.Qt.CursorShape.SizeVerCursor)
+class MacInternalCurtain(QtWidgets.QWidget):
+    def __init__(self, parent_win, overlay_ref):
+        super().__init__(parent_win)
+        self._overlay_ref = overlay_ref
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.hide()
+    def sync_to_parent(self):
+        p = self.parentWidget()
+        if p:
+            r = p.rect()
+            if self.geometry() != r:
+                self.setGeometry(r)
+            self.raise_()
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        ov = self._overlay_ref
+        if ov is not None and ov._static_pixmap is not None and not ov._static_pixmap.isNull():
+            painter.drawPixmap(0, 0, ov._static_pixmap)
+        else:
+            is_dark = get_current_mode() == "dark"
+            bg = QtGui.QColor(21, 22, 25, 255) if is_dark else QtGui.QColor(228, 234, 242, 255)
+            painter.fillRect(self.rect(), bg)
+        painter.end()
 class MacLoadingOverlay(QtWidgets.QWidget):
     def __init__(self):
         super().__init__(
@@ -487,37 +510,81 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         self._label = ""
         self._progress = 0.06
         self._anim_phase = 0.0
-        self._opacity = 1.0
-        self._fading_out = False
-        self._start_t = time.perf_counter()
-        self._last_t = self._start_t
+        self._start_t = 0.0
+        self._last_t = 0.0
+        self._last_hide_t = 0.0
+        self._appear_cooldown = 0.18
+        self._disappear_cooldown = 0.42
+        self._done_since_t = None
+        self._pending_callbacks = []
+        self._callbacks_ran = False
         self._dt_samples = []
         self._stable_count = 0
         self._target_fps = 60
         self._measured_fps = 60
-        self._min_duration = 0.85
-        self._max_duration = 1.65
+        self._min_duration = 0.90
+        self._max_duration = 1.75
         self._static_key = None
         self._static_pixmap = None
         self._emblem_key = None
         self._swoop_path = None
         self._hi_swoop_path = None
         self._x_font = None
+        self._curtain = None
         self._msg_font = QtGui.QFont("Segoe UI", 10)
         self._msg_font.setWeight(QtGui.QFont.Weight.Medium)
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(15)
         self._timer.timeout.connect(self._on_tick)
-    def start_loading(self, session=None, kind="startup", label=""):
+    def _ensure_curtain(self):
+        win = None
+        if self._session and hasattr(self._session, "ui") and hasattr(self._session.ui, "main_window"):
+            win = self._session.ui.main_window
+        if not win:
+            return None
+        if self._curtain is None or self._curtain.parentWidget() is not win:
+            self._curtain = MacInternalCurtain(win, self)
+        return self._curtain
+    def _hide_all(self):
+        self._timer.stop()
+        self._pending_callbacks.clear()
+        self._last_hide_t = time.perf_counter()
+        if self._curtain is not None:
+            try:
+                self._curtain.hide()
+            except Exception:
+                pass
+        self.hide()
+    def start_loading(self, session=None, kind="startup", label="", action_callback=None):
+        now = time.perf_counter()
+        if self.isVisible():
+            if session is not None:
+                self._session = session
+            if label:
+                self._label = label
+            if action_callback is not None:
+                self._pending_callbacks.append(action_callback)
+                self._callbacks_ran = False
+                self._done_since_t = None
+                self._progress = min(self._progress, 0.35)
+                self._start_t = now - self._appear_cooldown * 0.5
+            self._sync_geometry()
+            self.raise_()
+            self.repaint()
+            return
+        if action_callback is None and kind != "startup" and (now - self._last_hide_t) < 0.45:
+            return
         self._session = session
         self._kind = kind
         self._label = label
         self._progress = 0.06
-        self._fading_out = False
-        self._opacity = 1.0
-        self.setWindowOpacity(1.0)
-        self._start_t = time.perf_counter()
-        self._last_t = self._start_t
+        self._done_since_t = None
+        self._pending_callbacks.clear()
+        if action_callback is not None:
+            self._pending_callbacks.append(action_callback)
+        self._callbacks_ran = False
+        self._start_t = now
+        self._last_t = now
         self._dt_samples.clear()
         self._stable_count = 0
         scr = QtGui.QGuiApplication.primaryScreen()
@@ -525,21 +592,37 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         self._target_fps = 60 if hz >= 50.0 else 30
         self._measured_fps = self._target_fps
         if kind == "startup":
-            self._min_duration = 1.15
-            self._max_duration = 2.00
+            self._appear_cooldown = 0.16
+            self._min_duration = 1.30
+            self._max_duration = 2.20
+            self._disappear_cooldown = 0.45
         elif kind == "theme":
-            self._min_duration = 0.72
-            self._max_duration = 1.30
+            self._appear_cooldown = 0.18
+            self._min_duration = 0.92
+            self._max_duration = 1.65
+            self._disappear_cooldown = 0.42
         else:
-            self._min_duration = 0.52
-            self._max_duration = 0.98
+            self._appear_cooldown = 0.16
+            self._min_duration = 0.72
+            self._max_duration = 1.35
+            self._disappear_cooldown = 0.38
         self._sync_geometry()
-        if not self.isVisible():
-            self.show()
-            apply_win11_rounded_corners(self)
+        wi = max(1, self.width())
+        hi = max(1, self.height())
+        self._ensure_static_cache(wi, hi, get_current_mode() == "dark")
+        curt = self._ensure_curtain()
+        if curt is not None:
+            curt.sync_to_parent()
+            curt.show()
+            curt.raise_()
+            curt.repaint()
+        self.setWindowOpacity(1.0)
+        self.show()
+        apply_win11_rounded_corners(self)
         self.raise_()
         self.repaint()
         QtWidgets.QApplication.sendPostedEvents(self, QtCore.QEvent.Type.Paint)
+        QtWidgets.QApplication.processEvents(QtCore.QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents, 20)
         if not self._timer.isActive():
             self._timer.start()
     def _sync_geometry(self):
@@ -547,11 +630,13 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         if self._session and hasattr(self._session, "ui") and hasattr(self._session.ui, "main_window"):
             win = self._session.ui.main_window
         if win and win.isVisible():
-            geo = win.frameGeometry()
+            geo = win.frameGeometry().adjusted(-2, -2, 2, 2)
             if geo.width() < 200 or geo.height() < 200:
                 geo = win.geometry()
             if self.geometry() != geo:
                 self.setGeometry(geo)
+            if self._curtain is not None and self._curtain.isVisible():
+                self._curtain.sync_to_parent()
         else:
             scr = QtGui.QGuiApplication.primaryScreen()
             if scr:
@@ -561,57 +646,78 @@ class MacLoadingOverlay(QtWidgets.QWidget):
     def _on_tick(self):
         app = QtWidgets.QApplication.instance()
         if app and (app.activeModalWidget() or app.activePopupWidget()):
-            self._timer.stop()
-            self.hide()
+            self._hide_all()
             return
         if self._session and hasattr(self._session, "ui") and hasattr(self._session.ui, "main_window"):
             mw = self._session.ui.main_window
             if mw and mw.isMinimized():
-                self._timer.stop()
-                self.hide()
+                self._hide_all()
                 return
         now = time.perf_counter()
-        dt = max(0.001, now - self._last_t)
+        dt = max(0.001, min(0.08, now - self._last_t))
         self._last_t = now
         elapsed = now - self._start_t
         self._anim_phase += dt * 3.8
-        self._dt_samples.append(dt)
-        if len(self._dt_samples) > 10:
-            self._dt_samples.pop(0)
-        avg_dt = sum(self._dt_samples) / len(self._dt_samples)
-        raw_fps = int(round(1.0 / max(0.004, avg_dt)))
-        self._measured_fps = min(self._target_fps, max(12, raw_fps))
-        threshold_fps = 46 if self._target_fps >= 60 else 25
-        if self._measured_fps >= threshold_fps:
-            self._stable_count += 1
-        else:
-            self._stable_count = max(0, self._stable_count - 1)
+        self._sync_geometry()
+        if not self._callbacks_ran and elapsed >= self._appear_cooldown:
+            self._callbacks_ran = True
+            cbs = list(self._pending_callbacks)
+            self._pending_callbacks.clear()
+            for cb in cbs:
+                try:
+                    cb()
+                except Exception:
+                    pass
+            self._last_t = time.perf_counter()
+            self._dt_samples.clear()
+            self._stable_count = 0
+            self.update()
+            return
+        if self._callbacks_ran:
+            self._dt_samples.append(dt)
+            if len(self._dt_samples) > 10:
+                self._dt_samples.pop(0)
+            avg_dt = sum(self._dt_samples) / len(self._dt_samples)
+            raw_fps = int(round(1.0 / max(0.004, avg_dt)))
+            self._measured_fps = min(self._target_fps, max(12, raw_fps))
+            threshold_fps = 46 if self._target_fps >= 60 else 25
+            if self._measured_fps >= threshold_fps:
+                self._stable_count += 1
+            else:
+                self._stable_count = max(0, self._stable_count - 1)
         if self._session and hasattr(self._session, "main_view") and self._session.main_view:
             try:
                 self._session.main_view.check_for_drawing_change()
             except Exception:
                 pass
-        self._sync_geometry()
-        if self._fading_out:
-            self._opacity -= dt * 6.5
-            if self._opacity <= 0.04:
-                self._timer.stop()
-                self.hide()
+        if self._done_since_t is not None:
+            hold_elapsed = now - self._done_since_t
+            if hold_elapsed >= self._disappear_cooldown:
+                if self._session and hasattr(self._session, "ui") and hasattr(self._session.ui, "main_window"):
+                    mw = self._session.ui.main_window
+                    if mw:
+                        mw.update()
+                self._hide_all()
                 return
-            self.setWindowOpacity(max(0.0, self._opacity))
             self.update()
             return
-        base_prog = min(0.88, (elapsed / max(0.25, self._min_duration)) * 0.85)
-        if elapsed >= self._min_duration and (self._stable_count >= 5 or elapsed >= self._max_duration):
-            self._progress = min(1.0, self._progress + dt * 3.4)
-            if self._progress >= 0.995:
-                self._progress = 1.0
-                self._fading_out = True
+        if not self._callbacks_ran:
+            self._progress = min(0.24, 0.06 + (elapsed / max(0.05, self._appear_cooldown)) * 0.18)
         else:
-            if base_prog > self._progress:
-                self._progress = base_prog
+            work_elapsed = max(0.0, elapsed - self._appear_cooldown)
+            work_min = max(0.30, self._min_duration - self._appear_cooldown)
+            work_max = max(0.60, self._max_duration - self._appear_cooldown)
+            base_prog = min(0.90, 0.24 + (work_elapsed / work_min) * 0.66)
+            if work_elapsed >= work_min and (self._stable_count >= 6 or work_elapsed >= work_max):
+                self._progress = min(1.0, self._progress + dt * 3.2)
+                if self._progress >= 0.995:
+                    self._progress = 1.0
+                    self._done_since_t = now
             else:
-                self._progress = min(0.92, self._progress + dt * 0.25)
+                if base_prog > self._progress:
+                    self._progress = base_prog
+                else:
+                    self._progress = min(0.93, self._progress + dt * 0.22)
         self.update()
     def _get_messages(self):
         p = self._progress
@@ -837,12 +943,14 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         painter.drawText(text_rect, QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter, left_msg)
         painter.drawText(text_rect, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter, right_msg)
         painter.end()
-def show_mac_loading(session=None, kind="startup", label=""):
+def show_mac_loading(session=None, kind="startup", label="", action_callback=None):
     app = QtWidgets.QApplication.instance()
     if not app:
+        if action_callback is not None:
+            action_callback()
         return
     ov = getattr(app, "_mac_loading_overlay", None)
-    if ov is None or type(ov).__name__ != "MacLoadingOverlay" or not hasattr(ov, "_ensure_static_cache"):
+    if ov is None or type(ov).__name__ != "MacLoadingOverlay" or not hasattr(ov, "_hide_all"):
         if ov is not None:
             try:
                 ov.hide()
@@ -851,7 +959,7 @@ def show_mac_loading(session=None, kind="startup", label=""):
                 pass
         ov = MacLoadingOverlay()
         app._mac_loading_overlay = ov
-    ov.start_loading(session=session, kind=kind, label=label)
+    ov.start_loading(session=session, kind=kind, label=label, action_callback=action_callback)
 _SKIP_DLG_TITLES = frozenset(("open", "save", "recent", "open dicom", "snapshot", "spin movie"))
 class MacToolbarActionFilter(QtCore.QObject):
     def __init__(self, parent=None):
@@ -864,6 +972,7 @@ class MacToolbarActionFilter(QtCore.QObject):
                 and event.button() == QtCore.Qt.MouseButton.LeftButton
                 and isinstance(obj, QtWidgets.QToolButton)
                 and obj.isEnabled()
+                and not getattr(obj, "_mac_running_deferred", False)
             ):
                 pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
                 if obj.rect().contains(pos):
@@ -873,7 +982,15 @@ class MacToolbarActionFilter(QtCore.QObject):
                         return False
                     txt = obj.text().replace("\n", " ").strip()
                     if txt.lower() not in _SKIP_DLG_TITLES:
-                        show_mac_loading(self.session, kind="action", label=txt)
+                        obj.setDown(False)
+                        def _exec_btn(b=obj):
+                            try:
+                                b._mac_running_deferred = True
+                                b.click()
+                            finally:
+                                b._mac_running_deferred = False
+                        show_mac_loading(self.session, kind="action", label=txt, action_callback=_exec_btn)
+                        return True
         except Exception:
             pass
         return False
@@ -913,8 +1030,7 @@ class MacWindowHeader(QtWidgets.QWidget):
             def _on_mode_click(checked=False, m=mode_key, lt=label_text):
                 ses = self._session_getter() if self._session_getter else None
                 set_current_mode(m)
-                show_mac_loading(ses, kind="theme", label=lt)
-                apply_theme(ses, mode=m)
+                show_mac_loading(ses, kind="theme", label=lt, action_callback=lambda s=ses, md=m: apply_theme(s, mode=md))
             mb.clicked.connect(_on_mode_click)
             layout.addWidget(mb)
             self._mode_btns[mode_key] = mb
@@ -2133,9 +2249,10 @@ def apply_theme(session=None, mode=None):
         app._mac_tabs_hooked = True
     if session and hasattr(session, "triggers") and not getattr(session, "_mac_triggers_added", False):
         def on_session_restored(*args):
-            show_mac_loading(session, kind="action", label="Modelo 3D")
-            QtCore.QTimer.singleShot(40, lambda: configure_3d_canvas(session, recolor=False))
-            QtCore.QTimer.singleShot(80, lambda: _deferred_theme_sync(session))
+            def _sync_after_restore():
+                configure_3d_canvas(session, recolor=False)
+                _deferred_theme_sync(session)
+            show_mac_loading(session, kind="action", label="Modelo 3D", action_callback=_sync_after_restore)
         for _trig_name in ("end restore session", "session open", "open models", "add models"):
             try:
                 session.triggers.add_handler(_trig_name, on_session_restored)
@@ -2161,9 +2278,8 @@ try:
             _orig_session_init(self, *args, **kwargs)
             try:
                 def _start_with_splash():
-                    show_mac_loading(self, kind="startup")
-                    apply_theme(self, mode=_CURRENT_MODE)
-                QtCore.QTimer.singleShot(60, _start_with_splash)
+                    show_mac_loading(self, kind="startup", action_callback=lambda s=self: apply_theme(s, mode=_CURRENT_MODE))
+                QtCore.QTimer.singleShot(40, _start_with_splash)
             except Exception:
                 pass
         Session.__init__ = _mac_session_init
@@ -2186,20 +2302,21 @@ def reload_theme_from_disk(session=None, mode=None):
     global _CURRENT_MODE
     if mode is not None:
         set_current_mode(mode)
-    show_mac_loading(session, kind="theme")
-    theme_file = r"C:\Users\Parfion\chimerax_start\liquid_glass_theme.py"
-    if os.path.exists(theme_file):
-        try:
-            with open(theme_file, "r", encoding="utf-8") as f:
-                code = f.read()
-            ns = dict(globals())
-            ns["session"] = session
-            ns["_CURRENT_MODE"] = _CURRENT_MODE
-            exec(compile(code, theme_file, "exec"), ns)
-            return
-        except Exception:
-            pass
-    apply_theme(session, mode=_CURRENT_MODE)
+    def _do_reload():
+        theme_file = r"C:\Users\Parfion\chimerax_start\liquid_glass_theme.py"
+        if os.path.exists(theme_file):
+            try:
+                with open(theme_file, "r", encoding="utf-8") as f:
+                    code = f.read()
+                ns = dict(globals())
+                ns["session"] = session
+                ns["_CURRENT_MODE"] = _CURRENT_MODE
+                exec(compile(code, theme_file, "exec"), ns)
+                return
+            except Exception:
+                pass
+        apply_theme(session, mode=_CURRENT_MODE)
+    show_mac_loading(session, kind="theme", action_callback=_do_reload)
 def liquidglass_cmd(session, mode=None):
     if mode and mode.lower() in ("off", "disable", "reset", "default"):
         remove_theme(session)
