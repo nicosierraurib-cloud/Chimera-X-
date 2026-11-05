@@ -25,7 +25,27 @@ try:
     QtGui.QPixmapCache.setCacheLimit(65536)
 except Exception:
     pass
-_CURRENT_MODE = globals().get("_CURRENT_MODE", "gray")
+_MODE_STATE_FILE = os.path.join(os.path.expanduser("~/chimerax_start"), "theme_mode.txt")
+def _load_saved_mode():
+    try:
+        if os.path.exists(_MODE_STATE_FILE):
+            with open(_MODE_STATE_FILE, "r", encoding="utf-8") as f:
+                val = f.read().strip().lower()
+            if val in ("dark", "oscuro", "night"):
+                return "dark"
+            if val in ("gray", "gris"):
+                return "gray"
+    except Exception:
+        pass
+    return "gray"
+def _save_mode_to_disk(mode_str):
+    try:
+        os.makedirs(os.path.dirname(_MODE_STATE_FILE), exist_ok=True)
+        with open(_MODE_STATE_FILE, "w", encoding="utf-8") as f:
+            f.write(mode_str)
+    except Exception:
+        pass
+_CURRENT_MODE = globals().get("_CURRENT_MODE") or _load_saved_mode()
 _THEME_PALETTES = {
     "gray": {
         "win_bg": "#D5DBE5",
@@ -112,13 +132,16 @@ def get_current_mode():
     if app and hasattr(app, "_mac_current_mode"):
         return normalize_mode(app._mac_current_mode)
     return normalize_mode(_CURRENT_MODE)
-def set_current_mode(mode):
+def set_current_mode(mode, persist=True):
     global _CURRENT_MODE
     norm = normalize_mode(mode)
+    changed = _CURRENT_MODE != norm
     _CURRENT_MODE = norm
     app = QtWidgets.QApplication.instance()
     if app:
         app._mac_current_mode = norm
+    if persist and (changed or not os.path.exists(_MODE_STATE_FILE)):
+        _save_mode_to_disk(norm)
     return norm
 def get_palette_dict(mode=None):
     return _THEME_PALETTES[normalize_mode(mode or get_current_mode())]
@@ -2122,6 +2145,58 @@ try:
         SeqCanvas._mac_patch_ver = 2
 except Exception:
     pass
+def _style_histogram_pane(hp):
+    try:
+        is_dark = get_current_mode() == "dark"
+        pal = get_palette_dict()
+        bg_hex = "#16171B" if is_dark else "#FFFFFF"
+        bar_hex = "#8EC5FC" if is_dark else "#4B6584"
+        surf_pen = "#F5F5F7" if is_dark else "#1D1D1F"
+        img_pen = "#A0E7E5" if is_dark else "#0066CC"
+        if getattr(hp, "scene", None) is not None:
+            hp.scene.setBackgroundBrush(QtGui.QColor(bg_hex))
+        if getattr(hp, "canvas", None) is not None:
+            hp.canvas.setStyleSheet(
+                f"QGraphicsView {{ background-color: {bg_hex}; border: 1px solid {pal['border_soft']}; border-radius: 9px; }}"
+            )
+        if getattr(hp, "histogram", None) is not None:
+            hp.histogram.color = bar_hex
+        if getattr(hp, "surface_thresholds", None) is not None:
+            hp.surface_thresholds.pen_color = surf_pen
+            hp.surface_thresholds.unplot_markers()
+        if getattr(hp, "image_thresholds", None) is not None:
+            hp.image_thresholds.pen_color = img_pen
+            hp.image_thresholds.connect_color = img_pen
+            hp.image_thresholds.unplot_markers()
+        if getattr(hp, "histogram_shown", False) and getattr(hp, "histogram_data", None) is not None and _np is not None:
+            bins = hp.histogram_bins()
+            counts = hp.histogram_data.bin_counts(bins)
+            hp.histogram.show_data(_np.log(counts + 1))
+            if getattr(hp, "surface_thresholds", None) is not None:
+                hp.surface_thresholds.update_plot()
+            if getattr(hp, "image_thresholds", None) is not None:
+                hp.image_thresholds.update_plot()
+    except Exception:
+        pass
+try:
+    from chimerax.map.volume_viewer import Histogram_Pane
+    if getattr(Histogram_Pane, "_mac_patch_ver", 0) != 2:
+        _orig_make_hist = getattr(Histogram_Pane, "_orig_mac_make_hist", Histogram_Pane.make_histogram)
+        Histogram_Pane._orig_mac_make_hist = _orig_make_hist
+        def _mac_make_histogram(self, *args, **kwargs):
+            res = _orig_make_hist(self, *args, **kwargs)
+            _style_histogram_pane(self)
+            return res
+        Histogram_Pane.make_histogram = _mac_make_histogram
+        _orig_upd_hist_col = getattr(Histogram_Pane, "_orig_mac_upd_hist_col", Histogram_Pane._update_histogram_colors)
+        Histogram_Pane._orig_mac_upd_hist_col = _orig_upd_hist_col
+        def _mac_update_histogram_colors(self, trigger_name=None, trigger_data=None):
+            _orig_upd_hist_col(self, trigger_name, trigger_data)
+            _style_histogram_pane(self)
+        Histogram_Pane._update_histogram_colors = _mac_update_histogram_colors
+        Histogram_Pane._mac_patch_ver = 2
+except Exception:
+    pass
 def apply_light_to_sideview_and_sequences(session=None):
     if not session or not hasattr(session, "tools"):
         return
@@ -2142,6 +2217,9 @@ def apply_light_to_sideview_and_sequences(session=None):
                     sc.main_scene.setBackgroundBrush(bg)
                 if hasattr(sc, "_reformat"):
                     sc._reformat()
+            if hasattr(tool, "thresholds_panel") and hasattr(tool.thresholds_panel, "histogram_panes"):
+                for hp in tool.thresholds_panel.histogram_panes:
+                    _style_histogram_pane(hp)
             if hasattr(tool, "opengl_canvas") and hasattr(tool, "view") and tool.view is not None and _np is not None:
                 tool.view._background_rgba = _SV_BG_ARRAYS.get(cur_m, _SV_BG_ARRAYS["gray"])
                 if MacRoundedFrameOverlay is not None:

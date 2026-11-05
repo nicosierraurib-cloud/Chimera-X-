@@ -1,13 +1,15 @@
 # UCSF ChimeraX — Rediseño Visual
 
-Modificación de interfaz (Qt/QSS) e iconografía vectorial para **UCSF ChimeraX** (basado en `RBVI/ChimeraX`).
+Modificación de interfaz (Qt/QSS), motor de temas dual (**Gris** y **Oscuro**), pantalla de carga animada e iconografía vectorial para **UCSF ChimeraX** (basado en `RBVI/ChimeraX`).
 
 ## Especificaciones
 
-* **UI / QSS:** Viewport 3D y `Side View` en `#F5F5F7`, iluminación difusa (`lighting soft`) y contornos en `#3A3A3C` (`1.2px`). Paneles y tarjetas en `#FFFFFF` con cabeceras en `#F0F3F9`, bordes suaves en `#D5DFEE` (`1px`), radio de `12px` (`16px` en barra de herramientas), separadores verticales en azul pastel (`#BACBE6`) y esquinas redondeadas nativas DWM en Windows 11.
-* **Controles de Ventana (`QPainter`):** Botones circulares vectoriales con antialiasing integrados en la ventana principal y paneles acoplables (`Log`, `Models`, `Side View`, `Sequence Viewer`): Cerrar (`#FF5F56`), Minimizar (`#FFBD2E`), Maximizar/Flotar (`#27C93F`).
-* **Modo Claro Integral y Persistencia (`.cxs`):** Visor HTML (`Log`), `Sequence Viewer`, `Side View` y diálogos secundarios sincronizados en tema claro, con interceptores en `end restore session`, `session open` y `open models` y recarga en vivo (`QFileSystemWatcher`).
-* **Iconografía:** +200 iconos únicos (`128x128` PNG y `.svg` vectoriales) diferenciados por función, con caché `O(1)` en memoria y mapeados a la estructura nativa de paquetes.
+* **Motor Dual (`Gris` / `Oscuro`) con Persistencia:** Selector rápido en la barra superior (`Gris` en `#D5DBE5` / `#E4E8F0` y `Oscuro` en `#1C1C1E` / `#2C2C2E`) con guardado automático de preferencia entre sesiones (`theme_mode.txt`).
+* **Visor 3D y `Side View` Redondeados (`MacRoundedFrameOverlay`):** Viewport OpenGL principal enmarcado con radio de `16px` (`10px` en `Side View`), iluminación difusa (`lighting soft`), siluetas adaptativas (`1.2px`) y fondo de `Side View` dinámico (`#FFFFFF` en modo `Gris` y `#16171B` en modo `Oscuro`).
+* **Pantalla de Carga Funcional (`MacLoadingOverlay`):** Superposición 100% opaca con cortina interna (`MacInternalCurtain`), emblema vectorial animado en tiempo real, detección automática de versión (`v1.12`), mensajes de progreso por etapa, *cooldown* al aparecer/desaparecer y estabilización real de fotogramas a `30` o `60 FPS` según la tasa de refresco del monitor.
+* **Controles de Ventana (`QPainter`):** Botones circulares vectoriales con antialiasing en la ventana principal y paneles acoplables (`Log`, `Models`, `Side View`, `Sequence Viewer`, `Volume Viewer`): Cerrar (`#FF5F56`), Minimizar (`#FFBD2E`), Maximizar/Flotar (`#27C93F`).
+* **Paneles Científicos e Histogramas:** Sincronización cromática en `Log` (HTML/CSS), `Sequence Viewer`, `Side View` e histogramas de densidad de `Volume Viewer`, con interceptores en `end restore session`, `session open`, `open models` y `add models`.
+* **Iconografía:** +200 iconos únicos (`128x128` PNG y `.svg` vectoriales) diferenciados por función, con caché `@lru_cache` `O(1)` en memoria y mapeados a la estructura nativa de paquetes.
 
 ### Paleta Semántica
 * `#8EC5FC` — Cadenas principales, nitrógeno.
@@ -20,28 +22,37 @@ Modificación de interfaz (Qt/QSS) e iconografía vectorial para **UCSF ChimeraX
 
 ## Instalación
 
+En Windows (doble clic):
+```bat
+install_windows.bat
+```
+
+O mediante Python en cualquier plataforma:
 ```bash
 python install.py
 ```
 
-Dentro de la línea de comandos de ChimeraX puedes recargar o desactivar el tema en vivo:
-* `liquidglass` — Recarga el tema desde el disco.
+Comandos disponibles dentro de ChimeraX:
+* `liquidglass gray` — Activa el tema **Gris**.
+* `liquidglass dark` — Activa el tema **Oscuro**.
+* `liquidglass` — Recarga el tema activo desde el disco.
 * `liquidglass off` — Restaura el aspecto por defecto.
 
 ## Estructura
 
 ```text
 Chimera-X-/
-├── install.py                          # Instalador automático de 1 clic
-├── theme/liquid_glass_theme.py         # Controlador QSS, DWM e interceptores de sesión
+├── install.py                          # Instalador multiplataforma
+├── install_windows.bat                 # Instalador de 1 clic para Windows
+├── theme/liquid_glass_theme.py         # Controlador QSS, OpenGL, pantalla de carga y temas
 ├── hooks/mac_sequoia_theme.pth         # Inyección automática en el arranque
 ├── icons/                              # Activos PNG (128x128)
-├── packages/                           # Árbol de iconos espejado de ChimeraX
+├── packages/                           # Árbol de módulos espejado de ChimeraX
 ├── svg/                                # Fuentes vectoriales (.svg)
 └── scripts/
-    ├── deduplicate_and_redesign.py     # Rediseño vectorial diferenciado por función
     ├── generate_all_vector_icons.py    # Compilador PNG (Pillow)
-    └── generate_svgs.py                # Generador de trazados SVG
+    ├── generate_svgs.py                # Generador de trazados SVG
+    └── refine_weak_icons.py            # Refinamiento de iconos específicos
 ```
 
 ## Licencia
