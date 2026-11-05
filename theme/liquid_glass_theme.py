@@ -133,6 +133,12 @@ def is_cpp_valid(obj):
     if obj is None:
         return False
     try:
+        from PyQt6 import sip
+        if sip.isdeleted(obj):
+            return False
+    except Exception:
+        pass
+    try:
         obj.parent()
         return True
     except (RuntimeError, AttributeError, ReferenceError):
@@ -205,8 +211,16 @@ def apply_language(session=None, lang_code=None):
                 for i in range(tw.count()):
                     orig = _ORIG_TAB_TITLES.setdefault(f"tw_{id(tw)}_{i}", tw.tabText(i))
                     tw.setTabText(i, _tr(orig, cur_lang))
-        mb = mw.menuBar() if hasattr(mw, "menuBar") else None
-        if mb:
+        mb = None
+        top_c = getattr(mw, "_mac_top_container", None)
+        if is_cpp_valid(top_c) and hasattr(top_c, "_sub_mb") and is_cpp_valid(top_c._sub_mb):
+            mb = top_c._sub_mb
+        elif hasattr(mw, "menuBar"):
+            try:
+                mb = mw.menuBar()
+            except Exception:
+                mb = None
+        if mb and is_cpp_valid(mb):
             for act in mb.actions():
                 orig_m = _ORIG_ACTION_TITLES.setdefault(id(act), act.text())
                 act.setText(_tr(orig_m, cur_lang))
@@ -223,7 +237,7 @@ def apply_language(session=None, lang_code=None):
                 pass
         if hasattr(mw, "rapid_access") and mw.rapid_access:
             hero = getattr(mw.rapid_access, "_mac_hero_widget", None)
-            if hero:
+            if is_cpp_valid(hero):
                 hero.update()
         mw.update()
 _THEME_PALETTES = {
@@ -1259,16 +1273,7 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         ring_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
         painter.setPen(ring_pen)
         painter.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad, rad)
-        glow_pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 135 if is_dark else 165))
-        glow_pen.setWidthF(rad * 0.08)
-        glow_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-        painter.setPen(glow_pen)
-        angle_deg = int((self._anim_phase * 75.0) % 360.0) * 16
-        painter.drawArc(
-            QtCore.QRectF(em_cx - rad, em_cy - rad, rad * 2.0, rad * 2.0),
-            angle_deg,
-            52 * 16,
-        )
+
         painter.save()
         painter.translate(em_cx, em_cy)
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
@@ -1385,8 +1390,8 @@ class MacToolbarActionFilter(QtCore.QObject):
                     txt = obj.text().replace("\n", " ").strip()
                     tip = obj.toolTip().replace("\n", " ").strip().lower()
                     low = txt.lower()
-                    is_bg_action = any(k in low or k in tip for k in ("white", "black", "gray")) and any(
-                        k in low or k in tip for k in ("background", "bg", "white", "black")
+                    is_bg_action = any(k in low or k in tip for k in ("white", "black", "gray", "blanco", "negro", "gris", "\u767d", "\u9ed1", "\u0938\u092b\u0947\u0926", "\u0915\u093e\u0932\u093e", "\u0623\u0628\u064a\u0636", "\u0623\u0633\u0648\u062f", "blanc", "noir")) and any(
+                        k in low or k in tip for k in ("background", "bg", "fondo", "white", "black", "blanco", "negro", "\u80cc\u666f", "\u092a\u0943\u0937\u094d\u0920\u092d\u0942\u092e\u093f", "\u062e\u0644\u0641\u064a\u0629", "arri\u00e8re-plan")
                     )
                     if is_bg_action:
                         obj.setDown(False)
@@ -1654,6 +1659,43 @@ try:
         _Qt._mac_dock_ver = 5
 except Exception:
     pass
+class MacTopMenuBar(QtWidgets.QMenuBar):
+    def __init__(self, parent=None, original_mb=None, session_getter=None):
+        super().__init__(parent)
+        self._is_mac_top = True
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._vbox = QtWidgets.QVBoxLayout(self)
+        self._vbox.setContentsMargins(0, 0, 0, 0)
+        self._vbox.setSpacing(0)
+        self.header = MacWindowHeader(self, session_getter=session_getter)
+        self._vbox.addWidget(self.header)
+        self._sub_mb = original_mb if (original_mb and is_cpp_valid(original_mb)) else QtWidgets.QMenuBar(self)
+        if self._sub_mb.parent() is not self:
+            self._sub_mb.setParent(self)
+        self._vbox.addWidget(self._sub_mb)
+        self.header.show()
+        self._sub_mb.show()
+    def actions(self):
+        return self._sub_mb.actions() if is_cpp_valid(self._sub_mb) else []
+    def addMenu(self, *args, **kwargs):
+        return self._sub_mb.addMenu(*args, **kwargs) if is_cpp_valid(self._sub_mb) else None
+    def insertMenu(self, *args, **kwargs):
+        return self._sub_mb.insertMenu(*args, **kwargs) if is_cpp_valid(self._sub_mb) else None
+    def clear(self):
+        if is_cpp_valid(self._sub_mb):
+            self._sub_mb.clear()
+    def sizeHint(self):
+        h = 32
+        if is_cpp_valid(self._sub_mb) and self._sub_mb.isVisible():
+            h += max(24, self._sub_mb.sizeHint().height())
+        return QtCore.QSize(super().sizeHint().width(), h)
+    def minimumSizeHint(self):
+        return self.sizeHint()
+    def refresh_theme(self):
+        pal = get_palette_dict()
+        self.setStyleSheet(f"QMenuBar {{ background-color: {pal['win_bg']}; border: none; }}")
+        if is_cpp_valid(self.header):
+            self.header.refresh_theme()
 def install_window_traffic_lights(session=None):
     app = QtWidgets.QApplication.instance()
     if not app:
@@ -1668,7 +1710,7 @@ def install_window_traffic_lights(session=None):
         win.show()
     apply_win11_rounded_corners(win)
     existing_mw = win.menuWidget()
-    if existing_mw and getattr(existing_mw, "_is_mac_top", False):
+    if existing_mw is not None and getattr(existing_mw, "_is_mac_top", False) and is_cpp_valid(existing_mw):
         existing_hdr = getattr(win, "_mac_header_widget", None)
         if is_cpp_valid(existing_hdr):
             existing_hdr._session_getter = lambda: session
@@ -1682,28 +1724,35 @@ def install_window_traffic_lights(session=None):
             except Exception:
                 pass
             return
-    mb = win.menuBar()
-    if existing_mw and getattr(existing_mw, "_is_mac_top", False):
-        for child in existing_mw.findChildren(QtWidgets.QMenuBar):
-            mb = child
-            break
+    mb = None
+    if existing_mw is not None and is_cpp_valid(existing_mw):
+        if isinstance(existing_mw, QtWidgets.QMenuBar) and not getattr(existing_mw, "_is_mac_top", False):
+            mb = existing_mw
+        else:
+            for child in existing_mw.findChildren(QtWidgets.QMenuBar):
+                if not getattr(child, "_is_mac_top", False):
+                    mb = child
+                    break
+    if not mb:
+        try:
+            if hasattr(win, "_orig_mac_menuBar"):
+                mb = win._orig_mac_menuBar()
+            else:
+                mb = win.menuBar()
+        except Exception:
+            mb = None
     if mb:
         mb.setParent(None)
-    header = MacWindowHeader(win, session_getter=lambda: session)
-    win._mac_header_widget = header
-    top_container = QtWidgets.QWidget(win)
-    top_container._is_mac_top = True
-    vbox = QtWidgets.QVBoxLayout(top_container)
-    vbox.setContentsMargins(0, 0, 0, 0)
-    vbox.setSpacing(0)
-    vbox.addWidget(header)
-    if mb:
-        vbox.addWidget(mb)
-        mb.show()
-    win.setMenuWidget(top_container)
-    header.show()
-    top_container.show()
-    for mb_btn in getattr(header, "_mode_btns", {}).values():
+    top_bar = MacTopMenuBar(win, original_mb=mb, session_getter=lambda: session)
+    win._mac_top_container = top_bar
+    win._mac_header_widget = top_bar.header
+    if not hasattr(win, "_orig_mac_menuBar"):
+        win._orig_mac_menuBar = win.menuBar
+    win.menuBar = lambda: (top_bar._sub_mb if is_cpp_valid(top_bar) and is_cpp_valid(top_bar._sub_mb) else (win._orig_mac_menuBar() if hasattr(win, "_orig_mac_menuBar") else None))
+    win.setMenuWidget(top_bar)
+    top_bar.show()
+    top_bar.header.show()
+    for mb_btn in getattr(top_bar.header, "_mode_btns", {}).values():
         if is_cpp_valid(mb_btn):
             mb_btn.show()
     if not hasattr(win, "_mac_resize_filter"):
@@ -2736,7 +2785,14 @@ def configure_3d_canvas(session, recolor=False, force=False):
         try:
             pal = get_palette_dict()
             if force or not getattr(session, "_mac_user_custom_bg", False):
-                run(session, f"set bg {pal['viewport_bg']}", log=False)
+                if hasattr(session, "main_view") and session.main_view:
+                    session.main_view.background_color = pal["canvas_rgb"]
+                    session.main_view.redraw_needed = True
+                try:
+                    from chimerax.std_commands.set import set as cx_set
+                    cx_set(session, bg_color=pal["viewport_bg"])
+                except Exception:
+                    run(session, f"set bg_color {pal['viewport_bg']}", log=False)
             run(session, "lighting soft", log=False)
             run(session, f"graphics silhouettes true color {pal['silhouette_color']} width 1.2", log=False)
             if recolor:
