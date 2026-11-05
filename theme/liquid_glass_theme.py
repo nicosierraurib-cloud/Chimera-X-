@@ -995,15 +995,19 @@ class MacLoadingOverlay(QtWidgets.QWidget):
                 self.setGeometry(geo)
             if self._curtain is not None and self._curtain.isVisible():
                 self._curtain.sync_to_parent()
-        if self._showing_lang_selector:
-            self._position_lang_container()
         else:
             scr = QtGui.QGuiApplication.primaryScreen()
             if scr:
                 ag = scr.availableGeometry()
                 if self.geometry() != ag:
                     self.setGeometry(ag)
+        if self._showing_lang_selector:
+            self._position_lang_container()
     def _on_tick(self):
+        if self._showing_lang_selector:
+            self._sync_geometry()
+            self.update()
+            return
         app = QtWidgets.QApplication.instance()
         if app and (app.activeModalWidget() or app.activePopupWidget()):
             self._hide_all()
@@ -1321,6 +1325,10 @@ def open_language_selector(session=None):
     if ov is None or type(ov).__name__ != "MacLoadingOverlay":
         ov = MacLoadingOverlay()
         app._mac_loading_overlay = ov
+    if ov.isVisible() and getattr(ov, "_showing_lang_selector", False):
+        ov._showing_lang_selector = False
+        ov._hide_all()
+        return
     ov.start_language_selection(session=session)
 def show_mac_loading(session=None, kind="startup", label="", action_callback=None):
     app = QtWidgets.QApplication.instance()
