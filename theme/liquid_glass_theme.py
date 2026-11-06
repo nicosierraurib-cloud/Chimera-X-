@@ -1203,15 +1203,24 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         ring_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
         painter.setPen(ring_pen)
         painter.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad, rad)
-        glow_pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 135 if is_dark else 165))
-        glow_pen.setWidthF(rad * 0.08)
+        angle_deg = int((self._anim_phase * 75.0) % 360.0) * 16
+        glow_pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 120))
+        glow_pen.setWidthF(rad * 0.18)
         glow_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
         painter.setPen(glow_pen)
-        angle_deg = int((self._anim_phase * 75.0) % 360.0) * 16
         painter.drawArc(
             QtCore.QRectF(em_cx - rad, em_cy - rad, rad * 2.0, rad * 2.0),
             angle_deg,
-            52 * 16,
+            56 * 16,
+        )
+        bar_pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 255))
+        bar_pen.setWidthF(rad * 0.13)
+        bar_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        painter.setPen(bar_pen)
+        painter.drawArc(
+            QtCore.QRectF(em_cx - rad, em_cy - rad, rad * 2.0, rad * 2.0),
+            angle_deg,
+            56 * 16,
         )
         painter.save()
         painter.translate(em_cx, em_cy)
@@ -1382,6 +1391,16 @@ def open_language_selector(session=None):
     selector.sync_geometry()
     selector.show()
     selector.raise_()
+_curr_app = QtWidgets.QApplication.instance()
+if _curr_app and hasattr(_curr_app, "_mac_loading_overlay"):
+    try:
+        _old_ov = _curr_app._mac_loading_overlay
+        if _old_ov is not None:
+            _old_ov.hide()
+            _old_ov.deleteLater()
+    except Exception:
+        pass
+    _curr_app._mac_loading_overlay = None
 def show_mac_loading(session=None, kind="startup", label="", action_callback=None):
     app = QtWidgets.QApplication.instance()
     if not app:
@@ -1389,7 +1408,7 @@ def show_mac_loading(session=None, kind="startup", label="", action_callback=Non
             action_callback()
         return
     ov = getattr(app, "_mac_loading_overlay", None)
-    if ov is None or type(ov).__name__ != "MacLoadingOverlay" or not hasattr(ov, "_hide_all"):
+    if ov is None or ov.__class__ is not MacLoadingOverlay or not hasattr(ov, "_hide_all"):
         if ov is not None:
             try:
                 ov.hide()
