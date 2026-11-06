@@ -804,9 +804,13 @@ class MacInternalCurtain(QtWidgets.QWidget):
             self.raise_()
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
-        is_dark = get_current_mode() == "dark"
-        bg = QtGui.QColor(21, 22, 25, 230) if is_dark else QtGui.QColor(228, 234, 242, 230)
-        painter.fillRect(self.rect(), bg)
+        ov = self._overlay_ref
+        if ov is not None and ov._static_pixmap is not None and not ov._static_pixmap.isNull():
+            painter.drawPixmap(0, 0, ov._static_pixmap)
+        else:
+            is_dark = get_current_mode() == "dark"
+            bg = QtGui.QColor(21, 22, 25, 255) if is_dark else QtGui.QColor(228, 234, 242, 255)
+            painter.fillRect(self.rect(), bg)
         painter.end()
 class MacLoadingOverlay(QtWidgets.QWidget):
     def __init__(self):
@@ -1082,24 +1086,32 @@ class MacLoadingOverlay(QtWidgets.QWidget):
                 left = f"ChimeraX preparado ({tgt} FPS)"
                 right = f"v{_CX_VERSION} \u2022 {tgt} FPS estables"
         return left, right
-    def _ensure_static_cache(self, w, h, is_dark):
-        cache_key = (w, h, is_dark, self._kind)
-        if self._static_key == cache_key and self._static_pixmap is not None:
+    def _ensure_static_cache(self, wi, hi, is_dark):
+        key = (wi, hi, is_dark)
+        if self._static_key == key and self._static_pixmap is not None:
             return
-        self._static_key = cache_key
-        pix = QtGui.QPixmap(w, h)
-        pix.fill(QtCore.Qt.GlobalColor.transparent)
+        self._static_key = key
+        w = float(wi)
+        h = float(hi)
+        pix = QtGui.QPixmap(wi, hi)
+        bg_outer = QtGui.QColor(21, 22, 25, 255) if is_dark else QtGui.QColor(228, 234, 242, 255)
+        pix.fill(bg_outer)
         p = QtGui.QPainter(pix)
         p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         p.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
-        wf = float(w)
-        hf = float(h)
-        cw = min(680.0, max(500.0, wf * 0.58))
-        ch = min(460.0, max(340.0, hf * 0.62))
-        cx = wf * 0.5
-        cy = hf * 0.5
+        outer_border = QtGui.QPen(QtGui.QColor("#32343C") if is_dark else QtGui.QColor("#B8C3D4"))
+        outer_border.setWidthF(1.0)
+        p.setPen(outer_border)
+        p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        p.drawRect(QtCore.QRectF(0.5, 0.5, w - 1.0, h - 1.0))
+        cw = min(680.0, max(500.0, w * 0.58))
+        ch = min(460.0, max(340.0, h * 0.62))
+        cx = w * 0.5
+        cy = h * 0.5
         card_rect = QtCore.QRectF(cx - cw * 0.5, cy - ch * 0.5, cw, ch)
-        for sp, s_alpha in ((16.0, 18), (10.0, 28), (4.0, 48)):
+        for i in range(6, 0, -1):
+            sp = float(i) * 2.5
+            s_alpha = int((26 if is_dark else 11) * (7 - i) / 6.0)
             s_path = QtGui.QPainterPath()
             s_path.addRoundedRect(card_rect.adjusted(-sp, -sp + 3.0, sp, sp + 5.0), 14.0 + sp * 0.4, 14.0 + sp * 0.4)
             p.fillPath(s_path, QtGui.QColor(0, 0, 0, s_alpha))
@@ -1185,64 +1197,63 @@ class MacLoadingOverlay(QtWidgets.QWidget):
         ring_shadow_pen.setWidthF(rad * 0.145)
         painter.setPen(ring_shadow_pen)
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.drawEllipse(QtCore.QPointF(em_cx + 1.5, em_cy + 3.0), rad * 0.84, rad * 0.84)
-        ring_pen = QtGui.QPen(QtGui.QColor(10, 132, 255) if is_dark else QtGui.QColor(0, 102, 204))
+        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy + 3.5), rad, rad)
+        ring_pen = QtGui.QPen(QtGui.QColor("#8EBDF8"))
         ring_pen.setWidthF(rad * 0.145)
         ring_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
         painter.setPen(ring_pen)
-        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad * 0.84, rad * 0.84)
-        glow_grad = QtGui.QRadialGradient(em_cx, em_cy, rad * 0.92)
-        glow_grad.setColorAt(0.0, QtGui.QColor(10, 132, 255, 60 if is_dark else 35))
-        glow_grad.setColorAt(0.65, QtGui.QColor(10, 132, 255, 20 if is_dark else 10))
-        glow_grad.setColorAt(1.0, QtGui.QColor(10, 132, 255, 0))
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.setBrush(QtGui.QBrush(glow_grad))
-        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad * 0.92, rad * 0.92)
+        painter.drawEllipse(QtCore.QPointF(em_cx, em_cy), rad, rad)
+        glow_pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 135 if is_dark else 165))
+        glow_pen.setWidthF(rad * 0.08)
+        glow_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        painter.setPen(glow_pen)
+        angle_deg = int((self._anim_phase * 75.0) % 360.0) * 16
+        painter.drawArc(
+            QtCore.QRectF(em_cx - rad, em_cy - rad, rad * 2.0, rad * 2.0),
+            angle_deg,
+            52 * 16,
+        )
         painter.save()
         painter.translate(em_cx, em_cy)
-        x_grad = QtGui.QLinearGradient(0, -rad * 0.8, 0, rad * 0.8)
-        x_grad.setColorAt(0.0, QtGui.QColor("#FF453A") if is_dark else QtGui.QColor("#D70015"))
-        x_grad.setColorAt(1.0, QtGui.QColor("#D70015") if is_dark else QtGui.QColor("#A60010"))
-        painter.setFont(self._x_font)
-        painter.setPen(QtGui.QColor(0, 0, 0, 60 if is_dark else 35))
-        painter.drawText(QtCore.QPointF(-rad * 0.18 + 1.2, rad * 0.42 + 2.0), "X")
-        painter.setPen(QtGui.QPen(QtGui.QBrush(x_grad), 1.0))
-        painter.drawText(QtCore.QPointF(-rad * 0.18, rad * 0.42), "X")
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.setBrush(QtGui.QColor(220, 230, 242) if is_dark else QtGui.QColor(70, 75, 85))
-        painter.drawPath(self._swoop_path)
-        painter.setBrush(QtGui.QColor(255, 255, 255, 200))
-        painter.drawPath(self._hi_swoop_path)
-        ball_x = rad * 0.68
-        ball_y = rad * 0.30
-        ball_r = rad * 0.082
-        ball_shadow = QtGui.QRadialGradient(ball_x + 1.0, ball_y + 1.5, ball_r * 1.5)
-        ball_shadow.setColorAt(0.0, QtGui.QColor(0, 0, 0, 90))
-        ball_shadow.setColorAt(1.0, QtGui.QColor(0, 0, 0, 0))
-        painter.setBrush(QtGui.QBrush(ball_shadow))
-        painter.drawEllipse(QtCore.QPointF(ball_x + 1.0, ball_y + 1.5), ball_r * 1.5, ball_r * 1.5)
-        ball_grad = QtGui.QRadialGradient(ball_x - ball_r * 0.35, ball_y - ball_r * 0.35, ball_r * 1.3)
-        ball_grad.setColorAt(0.0, QtGui.QColor("#FFFFFF"))
-        ball_grad.setColorAt(0.45, QtGui.QColor("#E8EDF5") if is_dark else QtGui.QColor("#C4D2E5"))
-        ball_grad.setColorAt(1.0, QtGui.QColor("#8A9BB5") if is_dark else QtGui.QColor("#6A7C96"))
-        painter.setBrush(QtGui.QBrush(ball_grad))
-        painter.drawEllipse(QtCore.QPointF(ball_x, ball_y), ball_r, ball_r)
+        painter.fillPath(self._swoop_path, QtGui.QColor("#5C626E") if is_dark else QtGui.QColor("#3E434C"))
+        if is_dark:
+            hi_pen = QtGui.QPen(QtGui.QColor("#E4E8F0"))
+            hi_pen.setWidthF(rad * 0.075)
+            hi_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+            painter.setPen(hi_pen)
+            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+            painter.drawPath(self._hi_swoop_path)
+        node_pt = QtCore.QPointF(-rad * 0.02, -rad * 0.04)
+        node_r = rad * 0.115 * (1.0 + 0.08 * math.sin(self._anim_phase * 2.0))
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(QtGui.QColor("#808794") if is_dark else QtGui.QColor("#3E434C"))
+        painter.drawEllipse(node_pt, node_r, node_r)
         painter.restore()
+        painter.setFont(self._x_font)
+        x_rect = QtCore.QRectF(em_cx - rad * 0.10, em_cy - rad * 1.18, rad * 1.35, rad * 1.25)
+        painter.setPen(QtGui.QColor(0, 0, 0, 70 if is_dark else 42))
+        painter.drawText(x_rect.translated(2.0, 3.5), QtCore.Qt.AlignmentFlag.AlignCenter, "X")
+        painter.setPen(QtGui.QColor("#FF5E57"))
+        painter.drawText(x_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "X")
         bar_margin = 44.0
         bar_x = card_left + bar_margin
         bar_w = cw - bar_margin * 2.0
         bar_y = card_bottom - 54.0
         bar_h = 7.0
-        prog_w = max(10.0, bar_w * self._progress)
+        fill_w = max(12.0, bar_w * float(self._progress))
+        fill_rect = QtCore.QRectF(bar_x, bar_y, fill_w, bar_h)
         fill_path = QtGui.QPainterPath()
-        fill_path.addRoundedRect(QtCore.QRectF(bar_x, bar_y, prog_w, bar_h), 3.5, 3.5)
-        fill_grad = QtGui.QLinearGradient(bar_x, 0, bar_x + prog_w, 0)
-        fill_grad.setColorAt(0.0, QtGui.QColor("#0A84FF") if is_dark else QtGui.QColor("#0066CC"))
-        fill_grad.setColorAt(1.0, QtGui.QColor("#5AC8FA") if is_dark else QtGui.QColor("#34AADC"))
+        fill_path.addRoundedRect(fill_rect, 3.5, 3.5)
+        grad = QtGui.QLinearGradient(bar_x, bar_y, bar_x + fill_w, bar_y)
+        grad.setColorAt(0.0, QtGui.QColor("#8EC5FC"))
+        grad.setColorAt(0.5, QtGui.QColor("#A0E7E5"))
+        grad.setColorAt(1.0, QtGui.QColor("#B5EAD7"))
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.fillPath(fill_path, QtGui.QBrush(fill_grad))
-        shine_pos = (math.sin(self._anim_phase * 1.6) * 0.5 + 0.5) * prog_w
-        s_grad = QtGui.QLinearGradient(bar_x + shine_pos - 18.0, 0, bar_x + shine_pos + 18.0, 0)
+        painter.fillPath(fill_path, QtGui.QBrush(grad))
+        shimmer_pos = (self._anim_phase * 0.45) % 1.0
+        sx = bar_x + shimmer_pos * fill_w
+        s_grad = QtGui.QLinearGradient(sx - 35.0, bar_y, sx + 35.0, bar_y)
         s_grad.setColorAt(0.0, QtGui.QColor(255, 255, 255, 0))
         s_grad.setColorAt(0.5, QtGui.QColor(255, 255, 255, 130))
         s_grad.setColorAt(1.0, QtGui.QColor(255, 255, 255, 0))
