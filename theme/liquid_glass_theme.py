@@ -544,6 +544,7 @@ _CANDIDATE_ICON_DIRS = (
 ICONS_DIR = next((d for d in _CANDIDATE_ICON_DIRS if d and os.path.exists(d)), _CANDIDATE_ICON_DIRS[0])
 _EXISTING_ICONS = frozenset(os.listdir(ICONS_DIR)) if os.path.exists(ICONS_DIR) else frozenset()
 _QICON_CACHE = {}
+_HIGHLIGHT_ICON_CACHE = {}
 _SUBPATH_BASENAME_CACHE = {}
 def get_cached_qicon(file_path):
     icon = _QICON_CACHE.get(file_path)
@@ -551,22 +552,127 @@ def get_cached_qicon(file_path):
         icon = QtGui.QIcon(file_path)
         _QICON_CACHE[file_path] = icon
     return icon
+def _make_mac_highlight_icon(base_icon, icon_key=""):
+    if base_icon is None or base_icon.isNull():
+        return base_icon
+    cur_m = get_current_mode()
+    cache_k = (icon_key or id(base_icon), cur_m)
+    cached = _HIGHLIGHT_ICON_CACHE.get(cache_k)
+    if cached is not None:
+        return cached
+    is_dark = cur_m == "dark"
+    pm = QtGui.QPixmap(128, 128)
+    pm.fill(QtCore.Qt.GlobalColor.transparent)
+    p = QtGui.QPainter(pm)
+    p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+    p.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
+    bg_path = QtGui.QPainterPath()
+    bg_path.addRoundedRect(QtCore.QRectF(4.0, 4.0, 120.0, 120.0), 26.0, 26.0)
+    fill_col = QtGui.QColor(10, 132, 255, 62) if is_dark else QtGui.QColor(0, 122, 255, 45)
+    border_col = QtGui.QColor("#0A84FF") if is_dark else QtGui.QColor("#007AFF")
+    p.fillPath(bg_path, fill_col)
+    pen = QtGui.QPen(border_col)
+    pen.setWidthF(4.5)
+    p.setPen(pen)
+    p.drawPath(bg_path)
+    src_pm = base_icon.pixmap(128, 128)
+    if not src_pm.isNull():
+        p.drawPixmap(QtCore.QRectF(8.0, 8.0, 112.0, 112.0), src_pm, QtCore.QRectF(0.0, 0.0, float(src_pm.width()), float(src_pm.height())))
+    p.end()
+    res = QtGui.QIcon(pm)
+    _HIGHLIGHT_ICON_CACHE[cache_k] = res
+    return res
 try:
     from chimerax.core.toolshed.info import BundleInfo
-    if not hasattr(BundleInfo, "_mac_patched"):
-        _orig_get_path = BundleInfo.get_path
-        def _mac_get_path(self, subpath):
-            if subpath:
-                cached = _SUBPATH_BASENAME_CACHE.get(subpath)
-                if cached is None:
-                    fname = os.path.basename(subpath)
-                    cached = os.path.join(ICONS_DIR, fname) if fname in _EXISTING_ICONS else False
-                    _SUBPATH_BASENAME_CACHE[subpath] = cached
-                if cached:
-                    return cached
-            return _orig_get_path(self, subpath)
-        BundleInfo.get_path = _mac_get_path
-        BundleInfo._mac_patched = True
+    _orig_get_path = getattr(BundleInfo, "_orig_mac_get_path", BundleInfo.get_path)
+    BundleInfo._orig_mac_get_path = _orig_get_path
+    def _mac_get_path(self, subpath):
+        if subpath:
+            cached = _SUBPATH_BASENAME_CACHE.get(subpath)
+            if cached is None:
+                fname = os.path.basename(subpath)
+                if fname in _EXISTING_ICONS:
+                    cached = os.path.join(ICONS_DIR, fname)
+                else:
+                    png_alt = os.path.splitext(fname)[0] + ".png"
+                    cached = os.path.join(ICONS_DIR, png_alt) if png_alt in _EXISTING_ICONS else False
+                _SUBPATH_BASENAME_CACHE[subpath] = cached
+            if cached:
+                return cached
+        return _orig_get_path(self, subpath)
+    BundleInfo.get_path = _mac_get_path
+    BundleInfo._mac_patched = True
+except Exception:
+    pass
+_MOUSE_MODE_ICON_MAP = {
+    "mark maximum": "mark_maximum.png",
+    "mark plane": "mark_plane.png",
+    "mark surface": "mark_surface.png",
+    "mark center": "mark_center.png",
+    "mark point": "mark_point.png",
+    "link markers": "mark_link.png",
+    "move markers": "mark_move.png",
+    "resize markers": "mark_resize.png",
+    "delete markers": "mark_delete.png",
+    "rotate selected models": "rotatesel.png",
+    "translate selected models": "drag_model.png",
+    "move picked models": "move_picked_model.png",
+    "translate selected atoms": "move_atoms.png",
+    "rotate selected atoms": "rotate_atoms.png",
+    "contour level": "contour.png",
+    "move planes": "moveplanes.png",
+    "rotate slab": "rotateslab.png",
+    "crop volume": "crop.png",
+    "tape measure": "tape.png",
+    "pick blobs": "pickblobs.png",
+    "map eraser": "eraser.png",
+    "play map series": "vseries.png",
+    "windowing": "windowing.png",
+    "bond rotation": "bondrot.png",
+    "swapaa": "swapaa.png",
+    "play coordinates": "coordset.png",
+    "tug": "tug.png",
+    "minimize": "minimize.png",
+    "next docked": "nextdocking.png",
+    "clip": "clip.png",
+    "clip rotate": "cliprot.png",
+    "zone": "zone.png",
+    "distance": "distance.png",
+    "label": "label.png",
+    "move label": "movelabel.png",
+    "label or arrow": "movelabel.png",
+    "select": "select.png",
+    "rotate": "rotate.png",
+    "rotate and select": "rotatesel.png",
+    "translate": "translate.png",
+    "zoom": "zoom.png",
+    "pivot": "pivot.png",
+    "orthopick": "orthopick.png",
+    "create segmentations": "segger.png",
+    "erase segmentations": "eraser.png",
+    "move segmentation cursor": "translate.png",
+    "resize segmentation cursor": "mark_resize.png",
+}
+try:
+    from chimerax.mouse_modes.mousemodes import MouseMode
+    _orig_mm_icon_loc = getattr(MouseMode, "_orig_mac_icon_loc", MouseMode.icon_location.__func__)
+    MouseMode._orig_mac_icon_loc = _orig_mm_icon_loc
+    @classmethod
+    def _mac_mm_icon_location(cls):
+        mname = getattr(cls, "name", "")
+        mapped = _MOUSE_MODE_ICON_MAP.get(mname)
+        if mapped and mapped in _EXISTING_ICONS:
+            return os.path.join(ICONS_DIR, mapped)
+        ifile = getattr(cls, "icon_file", None)
+        if ifile:
+            bname = os.path.basename(ifile)
+            if bname in _EXISTING_ICONS:
+                return os.path.join(ICONS_DIR, bname)
+            png_alt = os.path.splitext(bname)[0] + ".png"
+            if png_alt in _EXISTING_ICONS:
+                return os.path.join(ICONS_DIR, png_alt)
+        return _orig_mm_icon_loc(cls)
+    MouseMode.icon_location = _mac_mm_icon_location
 except Exception:
     pass
 try:
@@ -706,6 +812,7 @@ _RAW_MAP = {
     ("Map", "Erase"): "eraser.png",
     ("Map", "Play series"): "vseries.png",
     ("Map", "Windowing"): "windowing.png",
+    ("Map", "Orthopick"): "orthopick.png",
     ("Structure Modification", "Bond rotation"): "bondrot.png",
     ("Structure Modification", "Swapaa"): "swapaa.png",
     ("Structure Modification", "Play coords"): "coordset.png",
@@ -2858,23 +2965,50 @@ def apply_mac_icons_to_all_tabs(session=None):
     if getattr(ttb, "_mac_qss_str", None) != tb_qss:
         ttb.setStyleSheet(tb_qss)
         ttb._mac_qss_str = tb_qss
+    active_rmb = getattr(tb_tool, "current_right_mouse_button", None)
+    rmb_dict = getattr(tb_tool, "right_mouse_buttons", {}) or {}
+    active_rmb_targets = set()
+    if active_rmb and active_rmb in rmb_dict:
+        for info in rmb_dict[active_rmb]:
+            if len(info) >= 3:
+                active_rmb_targets.add((info[0], info[1], info[2]))
     for tab_name, sections in getattr(ttb, "_buttons", {}).items():
         if not isinstance(sections, dict):
             continue
         for sec_name, section in sections.items():
             if sec_name == "__toolbar__":
                 continue
-            modified = False
+            widgets = section.createdWidgets() if hasattr(section, "createdWidgets") else ()
             for bi in getattr(section, "_buttons", []):
                 icon_path = resolve_mac_icon(bi.title, getattr(bi, "description", ""), sec_name, tab_name)
                 if icon_path:
                     cached_icon = get_cached_qicon(icon_path)
-                    if cached_icon and (bi.icon is not cached_icon or bi.highlight_icon is not None):
+                    if cached_icon:
                         bi.icon = cached_icon
-                        bi.highlight_icon = None
-                        modified = True
-            if modified:
-                pass
+                        is_hi = (tab_name, sec_name, bi.title) in active_rmb_targets or bi.highlight_icon is not None
+                        if is_hi:
+                            bi.highlight_icon = _make_mac_highlight_icon(cached_icon, icon_path)
+                            target_icon = bi.highlight_icon
+                        else:
+                            bi.highlight_icon = None
+                            target_icon = cached_icon
+                        for parent in widgets:
+                            act = section.get_qt_button_action(parent, bi.title) if hasattr(section, "get_qt_button_action") else None
+                            if act is not None:
+                                act.setIcon(target_icon)
+    if session and hasattr(session, "tools"):
+        try:
+            for t in session.tools.list():
+                if hasattr(t, "modes") and hasattr(t, "buttons"):
+                    for act in t.buttons.actions():
+                        mname = act.text()
+                        mapped = _MOUSE_MODE_ICON_MAP.get(mname)
+                        if mapped and mapped in _EXISTING_ICONS:
+                            qi = get_cached_qicon(os.path.join(ICONS_DIR, mapped))
+                            if qi:
+                                act.setIcon(qi)
+        except Exception:
+            pass
     app = QtWidgets.QApplication.instance()
     tb_filter = getattr(app, "_mac_tb_action_filter", None) if app else None
     if app and is_cpp_valid(tb_filter) and tb_filter.__class__ is not MacToolbarActionFilter:
@@ -2952,14 +3086,52 @@ except Exception:
     pass
 try:
     from chimerax.ui.widgets.tabbedtoolbar import _Section
-    if not hasattr(_Section, "_mac_update_btn_patched"):
-        _orig_update_button_action = _Section._update_button_action
-        def _mac_update_button_action(self, button, action):
-            _orig_update_button_action(self, button, action)
-            button.setIconSize(QtCore.QSize(28, 28))
-            button.setMinimumWidth(max(button.minimumWidth() + 8, 64))
-        _Section._update_button_action = _mac_update_button_action
-        _Section._mac_update_btn_patched = True
+    _orig_update_button_action = getattr(_Section, "_orig_mac_update_btn", _Section._update_button_action)
+    _Section._orig_mac_update_btn = _orig_update_button_action
+    def _mac_update_button_action(self, button, action):
+        _orig_update_button_action(self, button, action)
+        button.setIconSize(QtCore.QSize(28, 28))
+        button.setMinimumWidth(max(button.minimumWidth() + 8, 64))
+    _Section._update_button_action = _mac_update_button_action
+    _orig_redo_layout = getattr(_Section, "_orig_mac_redo_layout", _Section._redo_layout)
+    _Section._orig_mac_redo_layout = _orig_redo_layout
+    def _mac_redo_layout(self):
+        _orig_redo_layout(self)
+        QtCore.QTimer.singleShot(0, lambda: apply_mac_icons_to_all_tabs())
+    _Section._redo_layout = _mac_redo_layout
+    def _mac_add_button_highlight(self, title, redo=True):
+        sec_t = getattr(self, "section_title", "")
+        for bi in getattr(self, "_buttons", ()):
+            if bi.title == title:
+                ip = resolve_mac_icon(bi.title, getattr(bi, "description", ""), sec_t, "")
+                if ip:
+                    qi = get_cached_qicon(ip)
+                    if qi:
+                        bi.icon = qi
+                bi.highlight_icon = _make_mac_highlight_icon(bi.icon, ip or "")
+                for parent in self.createdWidgets():
+                    act = self.get_qt_button_action(parent, bi.title)
+                    if act is not None and bi.highlight_icon is not None:
+                        act.setIcon(bi.highlight_icon)
+                break
+    def _mac_remove_button_highlight(self, title, redo=True):
+        sec_t = getattr(self, "section_title", "")
+        for bi in getattr(self, "_buttons", ()):
+            if bi.title == title:
+                bi.highlight_icon = None
+                ip = resolve_mac_icon(bi.title, getattr(bi, "description", ""), sec_t, "")
+                if ip:
+                    qi = get_cached_qicon(ip)
+                    if qi:
+                        bi.icon = qi
+                for parent in self.createdWidgets():
+                    act = self.get_qt_button_action(parent, bi.title)
+                    if act is not None and bi.icon is not None:
+                        act.setIcon(bi.icon)
+                break
+    _Section.add_button_highlight = _mac_add_button_highlight
+    _Section.remove_button_highlight = _mac_remove_button_highlight
+    _Section._mac_update_btn_patched = True
 except Exception:
     pass
 try:

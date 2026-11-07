@@ -550,6 +550,201 @@ def icon_nextdocking():
     circle(d, 285, 270, 54, fill=C_CORAL, outline=C_DARK, width=14)
     arrow_head(d, (440, 270), 0, size=56, fill=C_MINT)
     return img
+def icon_close_box():
+    img, d = new_canvas()
+    rrect(d, [92, 92, 420, 420], 68, fill=C_CORAL, outline=C_DARK, width=16)
+    line_cap(d, (176, 176), (336, 336), fill=C_DARK, width=38)
+    line_cap(d, (336, 176), (176, 336), fill=C_DARK, width=38)
+    line_cap(d, (176, 176), (336, 336), fill=C_WHITE, width=20)
+    line_cap(d, (336, 176), (176, 336), fill=C_WHITE, width=20)
+    return img
+def icon_content_save():
+    img, d = new_canvas()
+    d.polygon([(92, 92), (356, 92), (420, 156), (420, 420), (92, 420)], fill=C_BLUE, outline=C_DARK, width=16)
+    rrect(d, [152, 92, 332, 212], 20, fill=C_WHITE, outline=C_DARK, width=14)
+    rrect(d, [264, 114, 304, 190], 10, fill=C_CORAL, outline=C_DARK, width=10)
+    rrect(d, [136, 268, 376, 420], 24, fill=C_YELLOW, outline=C_DARK, width=14)
+    line_cap(d, (184, 320), (328, 320), fill=C_DARK, width=14)
+    line_cap(d, (184, 366), (296, 366), fill=C_DARK, width=14)
+    return img
+def icon_undo_variant():
+    img, d = new_canvas()
+    d.arc([104, 148, 424, 428], start=215, end=45, fill=C_DARK, width=44)
+    d.arc([104, 148, 424, 428], start=215, end=45, fill=C_BLUE, width=22)
+    d.polygon([(96, 232), (208, 138), (222, 266)], fill=C_CORAL, outline=C_DARK, width=14)
+    return img
+def icon_redo_variant():
+    img, d = new_canvas()
+    d.arc([88, 148, 408, 428], start=135, end=325, fill=C_DARK, width=44)
+    d.arc([88, 148, 408, 428], start=135, end=325, fill=C_MINT, width=22)
+    d.polygon([(416, 232), (304, 138), (290, 266)], fill=C_CORAL, outline=C_DARK, width=14)
+    return img
+def icon_crop():
+    img, d = new_canvas()
+    rrect(d, [148, 148, 364, 364], 20, fill=C_MINT, outline=C_DARK, width=14)
+    line_cap(d, (156, 356), (356, 156), fill=C_WHITE, width=14)
+    line_cap(d, (148, 76), (148, 364), fill=C_DARK, width=32)
+    line_cap(d, (148, 364), (436, 364), fill=C_DARK, width=32)
+    line_cap(d, (148, 76), (148, 364), fill=C_GOLD, width=16)
+    line_cap(d, (148, 364), (436, 364), fill=C_GOLD, width=16)
+    line_cap(d, (76, 148), (364, 148), fill=C_DARK, width=32)
+    line_cap(d, (364, 148), (364, 436), fill=C_DARK, width=32)
+    line_cap(d, (76, 148), (364, 148), fill=C_CORAL, width=16)
+    line_cap(d, (364, 148), (364, 436), fill=C_CORAL, width=16)
+    return img
+def icon_zoom():
+    img, d = new_canvas()
+    line_cap(d, (295, 295), (426, 426), fill=C_DARK, width=48)
+    line_cap(d, (295, 295), (426, 426), fill=C_CORAL, width=26)
+    circle(d, 216, 216, 122, fill=C_CYAN, outline=C_DARK, width=16)
+    circle(d, 216, 216, 92, fill=C_WHITE, outline=C_DARK, width=12)
+    line_cap(d, (168, 216), (264, 216), fill=C_DARK, width=22)
+    line_cap(d, (216, 168), (216, 264), fill=C_DARK, width=22)
+    return img
+def icon_outlinebox():
+    img, d = new_canvas()
+    top_pts = [(256, 76), (420, 162), (256, 248), (92, 162)]
+    left_pts = [(92, 162), (256, 248), (256, 436), (92, 350)]
+    right_pts = [(256, 248), (420, 162), (420, 350), (256, 436)]
+    d.polygon(top_pts, fill=(160, 231, 229, 75), outline=C_DARK, width=14)
+    d.polygon(left_pts, fill=(142, 197, 252, 75), outline=C_DARK, width=14)
+    d.polygon(right_pts, fill=(226, 209, 249, 75), outline=C_DARK, width=14)
+    for p1, p2 in [
+        ((256, 76), (420, 162)),
+        ((420, 162), (256, 248)),
+        ((256, 248), (92, 162)),
+        ((92, 162), (256, 76)),
+        ((92, 162), (92, 350)),
+        ((420, 162), (420, 350)),
+        ((256, 248), (256, 436)),
+        ((92, 350), (256, 436)),
+        ((420, 350), (256, 436)),
+    ]:
+        line_cap(d, p1, p2, fill=C_DARK, width=20)
+        line_cap(d, p1, p2, fill=C_CYAN, width=10)
+    for vx, vy, vc in [
+        (256, 76, C_YELLOW),
+        (420, 162, C_CORAL),
+        (92, 162, C_MINT),
+        (256, 248, C_WHITE),
+        (92, 350, C_BLUE),
+        (420, 350, C_LAV),
+        (256, 436, C_PEACH),
+    ]:
+        circle(d, vx, vy, 20, fill=vc, outline=C_DARK, width=10)
+    return img
+def icon_mouse():
+    img, d = new_canvas()
+    rrect(d, [136, 72, 376, 440], 120, fill=C_WHITE, outline=C_DARK, width=16)
+    d.pieslice([136, 72, 376, 312], start=180, end=270, fill=C_BLUE, outline=C_DARK, width=14)
+    d.pieslice([136, 72, 376, 312], start=270, end=360, fill=C_MINT, outline=C_DARK, width=14)
+    line_cap(d, (136, 212), (376, 212), fill=C_DARK, width=14)
+    rrect(d, [234, 128, 278, 204], 22, fill=C_CORAL, outline=C_DARK, width=12)
+    return img
+def icon_right_controller():
+    img, d = new_canvas()
+    circle(d, 256, 176, 98, fill=C_CYAN, outline=C_DARK, width=16)
+    circle(d, 256, 176, 52, fill=(0, 0, 0, 0), outline=C_DARK, width=14)
+    rrect(d, [206, 224, 306, 436], 48, fill=C_LAV, outline=C_DARK, width=16)
+    circle(d, 256, 274, 28, fill=C_CORAL, outline=C_DARK, width=12)
+    circle(d, 256, 344, 18, fill=C_YELLOW, outline=C_DARK, width=10)
+    return img
+def icon_eraser():
+    img, d = new_canvas()
+    line_cap(d, (120, 404), (408, 404), fill=C_DARK, width=26)
+    line_cap(d, (120, 404), (408, 404), fill=C_MINT, width=14)
+    pts_pink = [(116, 312), (232, 196), (332, 296), (216, 412)]
+    pts_blue = [(232, 196), (324, 104), (424, 204), (332, 296)]
+    d.polygon(pts_pink, fill=C_CORAL, outline=C_DARK, width=16)
+    d.polygon(pts_blue, fill=C_BLUE, outline=C_DARK, width=16)
+    return img
+def icon_pickblobs():
+    img, d = new_canvas()
+    circle(d, 190, 250, 88, fill=C_MINT, outline=C_DARK, width=14)
+    circle(d, 286, 290, 78, fill=C_BLUE, outline=C_DARK, width=14)
+    circle(d, 266, 180, 74, fill=C_CORAL, outline=C_DARK, width=16)
+    line_cap(d, (310, 148), (424, 76), fill=C_DARK, width=26)
+    line_cap(d, (310, 148), (424, 76), fill=C_YELLOW, width=14)
+    circle(d, 266, 180, 24, fill=C_WHITE, outline=C_DARK, width=10)
+    return img
+def icon_contour():
+    img, d = new_canvas()
+    d.ellipse([76, 96, 436, 416], fill=C_BLUE, outline=C_DARK, width=15)
+    d.ellipse([122, 138, 390, 374], fill=C_MINT, outline=C_DARK, width=14)
+    d.ellipse([168, 180, 344, 332], fill=C_YELLOW, outline=C_DARK, width=14)
+    d.ellipse([214, 220, 298, 292], fill=C_CORAL, outline=C_DARK, width=12)
+    return img
+def icon_windowing():
+    img, d = new_canvas()
+    rrect(d, [84, 84, 428, 428], 48, fill=C_WHITE, outline=C_DARK, width=16)
+    d.polygon([(100, 412), (256, 412), (256, 100), (100, 100)], fill=C_MUTED_BLUE)
+    rrect(d, [84, 84, 428, 428], 48, fill=None, outline=C_DARK, width=16)
+    pts = [(128, 372), (204, 364), (256, 256), (308, 148), (384, 140)]
+    for i in range(len(pts) - 1):
+        line_cap(d, pts[i], pts[i + 1], fill=C_DARK, width=28)
+    for i in range(len(pts) - 1):
+        line_cap(d, pts[i], pts[i + 1], fill=C_CORAL, width=14)
+    circle(d, 128, 372, 22, fill=C_MINT, outline=C_DARK, width=10)
+    circle(d, 384, 140, 22, fill=C_YELLOW, outline=C_DARK, width=10)
+    return img
+def icon_rotate_atoms():
+    img, d = new_canvas()
+    d.ellipse([84, 168, 428, 344], fill=None, outline=C_DARK, width=24)
+    d.ellipse([84, 168, 428, 344], fill=None, outline=C_MINT, width=12)
+    circle(d, 256, 256, 68, fill=C_BLUE, outline=C_DARK, width=15)
+    circle(d, 104, 256, 36, fill=C_CORAL, outline=C_DARK, width=12)
+    circle(d, 408, 256, 36, fill=C_YELLOW, outline=C_DARK, width=12)
+    return img
+def icon_swapaa():
+    img, d = new_canvas()
+    d.arc([120, 96, 392, 340], start=200, end=340, fill=C_DARK, width=28)
+    d.arc([120, 96, 392, 340], start=200, end=340, fill=C_BLUE, width=14)
+    d.arc([120, 172, 392, 416], start=20, end=160, fill=C_DARK, width=28)
+    d.arc([120, 172, 392, 416], start=20, end=160, fill=C_GOLD, width=14)
+    circle(d, 128, 256, 56, fill=C_MINT, outline=C_DARK, width=15)
+    circle(d, 384, 256, 56, fill=C_CORAL, outline=C_DARK, width=15)
+    return img
+def icon_sequence():
+    img, d = new_canvas()
+    colors = [
+        (92, 116, C_CORAL),
+        (206, 116, C_MINT),
+        (320, 116, C_BLUE),
+        (92, 272, C_YELLOW),
+        (206, 272, C_LAV),
+        (320, 272, C_CYAN),
+    ]
+    for x, y, col in colors:
+        rrect(d, [x, y, x + 100, y + 124], 22, fill=col, outline=C_DARK, width=14)
+        line_cap(d, (x + 28, y + 62), (x + 72, y + 62), fill=C_DARK, width=16)
+    return img
+def icon_orthopick():
+    img, d = new_canvas()
+    top_pts = [(256, 80), (416, 166), (256, 252), (96, 166)]
+    left_pts = [(96, 166), (256, 252), (256, 432), (96, 346)]
+    right_pts = [(256, 252), (416, 166), (416, 346), (256, 432)]
+    d.polygon(top_pts, fill=C_MINT, outline=C_DARK, width=14)
+    d.polygon(left_pts, fill=C_BLUE, outline=C_DARK, width=14)
+    d.polygon(right_pts, fill=C_LAV, outline=C_DARK, width=14)
+    circle(d, 256, 252, 44, fill=C_CORAL, outline=C_DARK, width=14)
+    circle(d, 256, 252, 16, fill=C_WHITE, outline=C_DARK, width=8)
+    return img
+def icon_whitebg():
+    img, d = new_canvas()
+    rrect(d, [88, 88, 424, 424], 56, fill=C_WHITE, outline=C_DARK, width=16)
+    circle(d, 336, 176, 34, fill=C_YELLOW, outline=C_DARK, width=12)
+    return img
+def icon_graybg():
+    img, d = new_canvas()
+    rrect(d, [88, 88, 424, 424], 56, fill=(180, 190, 206, 255), outline=C_DARK, width=16)
+    circle(d, 256, 256, 38, fill=C_BLUE, outline=C_DARK, width=12)
+    return img
+def icon_blackbg():
+    img, d = new_canvas()
+    rrect(d, [88, 88, 424, 424], 56, fill=(44, 46, 54, 255), outline=C_WHITE, width=14)
+    rrect(d, [88, 88, 424, 424], 56, fill=None, outline=C_DARK, width=8)
+    circle(d, 332, 180, 34, fill=C_LAV, outline=C_WHITE, width=10)
+    return img
 GENERATORS = {
     "open-in-app.png": icon_open_in_app,
     "video.png": icon_video,
@@ -617,6 +812,69 @@ GENERATORS = {
     "tug.png": icon_tug,
     "minimize.png": icon_minimize,
     "nextdocking.png": icon_nextdocking,
+    "close-box.png": icon_close_box,
+    "content-save.png": icon_content_save,
+    "undo-variant.png": icon_undo_variant,
+    "redo-variant.png": icon_redo_variant,
+    "crop.png": icon_crop,
+    "zoom.png": icon_zoom,
+    "outlinebox.png": icon_outlinebox,
+    "mouse.png": icon_mouse,
+    "right_controller.png": icon_right_controller,
+    "eraser.png": icon_eraser,
+    "pickblobs.png": icon_pickblobs,
+    "contour.png": icon_contour,
+    "windowing.png": icon_windowing,
+    "rotate_atoms.png": icon_rotate_atoms,
+    "swapaa.png": icon_swapaa,
+    "sequence.png": icon_sequence,
+    "orthopick.png": icon_orthopick,
+    "whitebg.png": icon_whitebg,
+    "graybg.png": icon_graybg,
+    "blackbg.png": icon_blackbg,
+}
+ALIASES = {
+    "ckiconvertical.png": "ckicon.png",
+    "ckicon0.png": "ckicon.png",
+    "maximum.png": "mark_maximum.png",
+    "surface.png": "mark_surface.png",
+    "center.png": "mark_center.png",
+    "point.png": "mark_point.png",
+    "link.png": "mark_link.png",
+    "move.png": "mark_move.png",
+    "resize.png": "mark_resize.png",
+    "delete.png": "mark_delete.png",
+    "marker.png": "mark_point.png",
+    "marker2.png": "mark_surface.png",
+    "move_h2o.png": "drag_model.png",
+    "rotate_h2o.png": "rotatesel.png",
+    "ball.png": "ball_stick.png",
+    "hbondsflat.png": "hbonds.png",
+    "hbondsflathide.png": "hbondshide.png",
+    "mouse_small.png": "mouse.png",
+    "right_controller_small.png": "right_controller.png",
+    "atomhide-dark.png": "atomhide.png",
+    "orient-dark.png": "orient.png",
+    "recentfiles-dark.png": "recentfiles.png",
+    "ribhide-dark.png": "ribhide.png",
+    "silhouette-dark.png": "silhouette.png",
+    "surfhide-dark.png": "surfhide.png",
+    "viewall-dark.png": "viewall.png",
+    "viewsel-dark.png": "viewsel.png",
+    "clip_wht.png": "clip.png",
+    "cliprot_wht.png": "cliprot.png",
+    "undo.png": "undo-variant.png",
+    "redo.png": "redo-variant.png",
+    "save.png": "content-save.png",
+    "open.png": "open-in-app.png",
+    "recent.png": "recentfiles.png",
+    "snapshot.png": "camera.png",
+    "movie.png": "video.png",
+    "surf.png": "surfshow.png",
+    "zplane.png": "plane.png",
+    "create_segmentation.png": "segger.png",
+    "move_cursor.png": "translate.png",
+    "resize_cursor.png": "mark_resize.png",
 }
 def main():
     dirs_to_update = [
@@ -652,6 +910,30 @@ def main():
             if os.path.exists(sd):
                 with open(os.path.join(sd, svg_name), "w", encoding="utf-8") as f:
                     f.write(generated_svg_text[svg_name])
+    src_icon_dir = r"C:\Users\Parfion\chimerax_start\icons"
+    for alias_png, target_png in ALIASES.items():
+        png_bytes = generated_png_bytes.get(target_png)
+        if png_bytes is None:
+            tp = os.path.join(src_icon_dir, target_png)
+            if os.path.exists(tp):
+                with open(tp, "rb") as fp:
+                    png_bytes = fp.read()
+        if png_bytes is not None:
+            generated_png_bytes[alias_png] = png_bytes
+            b64 = base64.b64encode(png_bytes).decode("ascii")
+            svg_name = os.path.splitext(alias_png)[0] + ".svg"
+            generated_svg_text[svg_name] = (
+                f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">'
+                f'<image width="128" height="128" href="data:image/png;base64,{b64}"/></svg>'
+            )
+            for d in dirs_to_update:
+                if os.path.exists(d):
+                    with open(os.path.join(d, alias_png), "wb") as f:
+                        f.write(png_bytes)
+            for sd in svg_dirs:
+                if os.path.exists(sd):
+                    with open(os.path.join(sd, svg_name), "w", encoding="utf-8") as f:
+                        f.write(generated_svg_text[svg_name])
     tree_roots = [
         r"C:\Users\Parfion\Documents\GitHub\Chimera-X-\packages\chimerax",
         r"C:\Users\Parfion\AppData\Local\UCSF\ChimeraX\1.12\Python311\site-packages\chimerax",
