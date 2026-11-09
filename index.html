@@ -590,6 +590,8 @@
     .cx-win-modes {
       display: flex;
       gap: 4px;
+      position: relative;
+      align-items: center;
     }
 
     .cx-mode-pill {
@@ -601,12 +603,77 @@
       border: 1px solid rgba(128, 128, 128, 0.28);
       background: rgba(128, 128, 128, 0.12);
       color: inherit;
+      user-select: none;
+      transition: all 0.14s ease;
+    }
+
+    .cx-mode-pill:hover {
+      border-color: #0A84FF;
     }
 
     .cx-mode-pill.active {
       background: #0A84FF;
       color: #FFFFFF;
       border-color: #0A84FF;
+    }
+
+    .cx-lang-wrap {
+      position: relative;
+      display: inline-flex;
+    }
+
+    .cx-lang-menu {
+      position: absolute;
+      top: calc(100% + 5px);
+      right: 0;
+      z-index: 40;
+      min-width: 122px;
+      background: #25262C;
+      border: 1px solid #3E4047;
+      border-radius: 9px;
+      padding: 4px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .cx-window-mock.mode-light .cx-lang-menu {
+      background: #FFFFFF;
+      border-color: #D5DFEE;
+      color: #1D1D1F;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+    }
+
+    .cx-window-mock.mode-gray .cx-lang-menu {
+      background: #E4E8F0;
+      border-color: #AEB9CC;
+      color: #1D1D1F;
+    }
+
+    .cx-lang-menu.open {
+      display: flex;
+    }
+
+    .cx-lang-opt {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .cx-lang-opt:hover {
+      background: rgba(10, 132, 255, 0.18);
+    }
+
+    .cx-lang-opt.active {
+      background: #0A84FF;
+      color: #FFFFFF;
+      font-weight: 600;
     }
 
     .cx-menubar {
@@ -1181,11 +1248,21 @@
               <span class="cx-mode-pill" id="pillLight" onclick="setMockMode('light')">Claro</span>
               <span class="cx-mode-pill" id="pillGray" onclick="setMockMode('gray')">Gris</span>
               <span class="cx-mode-pill active" id="pillDark" onclick="setMockMode('dark')">Oscuro</span>
-              <span class="cx-mode-pill">Idioma</span>
+              <div class="cx-lang-wrap">
+                <span class="cx-mode-pill" id="pillLang" onclick="toggleMockLangMenu(event)">Idioma &#9662;</span>
+                <div class="cx-lang-menu" id="cxLangMenu">
+                  <div class="cx-lang-opt active" data-lang="es" onclick="setMockLang('es', event)"><span>Español</span><span>ES</span></div>
+                  <div class="cx-lang-opt" data-lang="en" onclick="setMockLang('en', event)"><span>English</span><span>EN</span></div>
+                  <div class="cx-lang-opt" data-lang="pt" onclick="setMockLang('pt', event)"><span>Português</span><span>PT</span></div>
+                  <div class="cx-lang-opt" data-lang="fr" onclick="setMockLang('fr', event)"><span>Français</span><span>FR</span></div>
+                  <div class="cx-lang-opt" data-lang="de" onclick="setMockLang('de', event)"><span>Deutsch</span><span>DE</span></div>
+                  <div class="cx-lang-opt" data-lang="zh" onclick="setMockLang('zh', event)"><span>中文</span><span>ZH</span></div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="cx-menubar">
+          <div class="cx-menubar" id="cxMenubar">
             <span>Archivo</span>
             <span>Edicion</span>
             <span>Seleccionar</span>
@@ -1197,10 +1274,10 @@
           </div>
 
           <div class="cx-tabs">
-            <span class="cx-tab active" data-tab="inicio" onclick="switchMockTab('inicio')">Inicio</span>
-            <span class="cx-tab" data-tab="vista" onclick="switchMockTab('vista')">Vista Molecular</span>
-            <span class="cx-tab" data-tab="marcadores" onclick="switchMockTab('marcadores')">Marcadores</span>
-            <span class="cx-tab" data-tab="derecho" onclick="switchMockTab('derecho')">Boton Derecho</span>
+            <span class="cx-tab active" id="tabInicio" data-tab="inicio" onclick="switchMockTab('inicio')">Inicio</span>
+            <span class="cx-tab" id="tabVista" data-tab="vista" onclick="switchMockTab('vista')">Vista Molecular</span>
+            <span class="cx-tab" id="tabMarcadores" data-tab="marcadores" onclick="switchMockTab('marcadores')">Marcadores</span>
+            <span class="cx-tab" id="tabDerecho" data-tab="derecho" onclick="switchMockTab('derecho')">Boton Derecho</span>
           </div>
 
           <div class="cx-toolbar-pane" id="cxToolbarPane">
@@ -1221,7 +1298,7 @@
                   <div style="font-size:15px;font-weight:800;">Chimera X</div>
                 </div>
               </div>
-              <span class="cx-canvas-link">Primeros pasos</span>
+              <span class="cx-canvas-link" id="cxCanvasLink">Primeros pasos</span>
             </div>
 
             <div class="cx-log-card">
@@ -1229,12 +1306,12 @@
                 <span class="tdot close" style="width:8px;height:8px;"></span>
                 <span class="tdot min" style="width:8px;height:8px;"></span>
                 <span class="tdot zoom" style="width:8px;height:8px;"></span>
-                <span style="margin-left:3px;">Historial de Comandos</span>
+                <span style="margin-left:3px;" id="cxLogTitle">Historial de Comandos</span>
               </div>
               <div class="cx-log-body">
                 <div>UCSF ChimeraX version: 1.12</div>
-                <div style="color:#8EC5FC;margin-top:4px;">&gt; theme dark</div>
-                <div style="opacity:0.65;">Liquid Glass UI active (60 FPS)</div>
+                <div style="color:#8EC5FC;margin-top:4px;" id="cxLogCmd">&gt; theme dark</div>
+                <div style="opacity:0.65;" id="cxLogStatus">Liquid Glass UI active (60 FPS)</div>
               </div>
             </div>
           </div>
@@ -1561,7 +1638,183 @@
       ]
     };
 
+    let currentMockLang = 'es';
+    let currentMockTab = 'inicio';
+
+    const MOCK_I18N = {
+      es: {
+        pills: ['Claro', 'Gris', 'Oscuro', 'Idioma ▾'],
+        menus: ['Archivo', 'Edicion', 'Seleccionar', 'Acciones', 'Ajustes predefinidos', 'Favoritos', 'Herramientas', 'Ayuda'],
+        tabs: { inicio: 'Inicio', vista: 'Vista Molecular', marcadores: 'Marcadores', derecho: 'Boton Derecho' },
+        canvas: 'Primeros pasos',
+        logTitle: 'Historial de Comandos',
+        status: 'Liquid Glass UI activo (60 FPS)',
+        tr: {}
+      },
+      en: {
+        pills: ['Light', 'Gray', 'Dark', 'Language ▾'],
+        menus: ['File', 'Edit', 'Select', 'Actions', 'Presets', 'Favorites', 'Tools', 'Help'],
+        tabs: { inicio: 'Home', vista: 'Molecule Display', marcadores: 'Markers', derecho: 'Right Mouse' },
+        canvas: 'Getting Started',
+        logTitle: 'Command History',
+        status: 'Liquid Glass UI active (60 FPS)',
+        tr: {
+          'ARCHIVO': 'FILE', 'Abrir': 'Open', 'Recientes': 'Recent', 'Guardar': 'Save',
+          'IMAGENES': 'IMAGES', 'Captura': 'Snapshot', 'Giro': 'Spin',
+          'ATOMOS': 'ATOMS', 'Mostrar': 'Show', 'Ocultar': 'Hide',
+          'ESTILOS': 'STYLES', 'Varillas': 'Stick', 'Esferas': 'Sphere', 'Bolas': 'Ball Stick',
+          'ILUMINACION': 'LIGHTING', 'Simple': 'Simple', 'Suave': 'Soft', 'Completa': 'Full',
+          'CINTAS': 'CARTOONS', 'SUPERFICIES': 'SURFACES',
+          'COLORACION': 'COLORING', 'Elemento': 'Hetero', 'Cadena': 'Chain', 'Arcoiris': 'Rainbow', 'Electro': 'Coulombic', 'Factor B': 'B-Factor',
+          'ANALISIS': 'ANALYSIS', 'Puentes H': 'H-Bonds', 'Secuencia': 'Sequence',
+          'COLOCAR MARCADORES': 'PLACE MARKERS', 'Maximo': 'Maximum', 'Plano': 'Plane', 'Superficie': 'Surface', 'Centrar': 'Center', 'Punto': 'Point',
+          'AJUSTAR MARCADORES': 'ADJUST MARKERS', 'Enlace': 'Link', 'Mover': 'Move', 'Redim.': 'Resize', 'Eliminar': 'Delete',
+          'MOVIMIENTO': 'MOVEMENT', 'Seleccionar': 'Select', 'Rotar': 'Rotate', 'Trasladar': 'Translate', 'Zoom': 'Zoom', 'Pivote': 'Pivot',
+          'ANOTACION': 'ANNOTATION', 'Distancia': 'Distance', 'Etiqueta': 'Label', 'Clave': 'Color Key',
+          'MAPA': 'MAP', 'Contorno': 'Contour', 'Recortar': 'Crop', 'Mancha': 'Blob', 'Borrar': 'Erase'
+        }
+      },
+      pt: {
+        pills: ['Claro', 'Cinza', 'Escuro', 'Idioma ▾'],
+        menus: ['Arquivo', 'Editar', 'Selecionar', 'Acoes', 'Predefinicoes', 'Favoritos', 'Ferramentas', 'Ajuda'],
+        tabs: { inicio: 'Inicio', vista: 'Exibicao Molecular', marcadores: 'Marcadores', derecho: 'Botao Direito' },
+        canvas: 'Primeiros passos',
+        logTitle: 'Historico de Comandos',
+        status: 'Liquid Glass UI ativo (60 FPS)',
+        tr: {
+          'ARCHIVO': 'ARQUIVO', 'Abrir': 'Abrir', 'Recientes': 'Recentes', 'Guardar': 'Salvar',
+          'IMAGENES': 'IMAGENS', 'Captura': 'Captura', 'Giro': 'Girar',
+          'ATOMOS': 'ATOMOS', 'Mostrar': 'Mostrar', 'Ocultar': 'Ocultar',
+          'ESTILOS': 'ESTILOS', 'Varillas': 'Bastoes', 'Esferas': 'Esferas', 'Bolas': 'Bolas',
+          'ILUMINACION': 'ILUMINACAO', 'Simple': 'Simples', 'Suave': 'Suave', 'Completa': 'Completa',
+          'CINTAS': 'FITAS', 'SUPERFICIES': 'SUPERFICIES',
+          'COLORACION': 'COLORACAO', 'Elemento': 'Elemento', 'Cadena': 'Cadeia', 'Arcoiris': 'Arco-iris', 'Electro': 'Eletro', 'Factor B': 'Fator B',
+          'ANALISIS': 'ANALISE', 'Puentes H': 'Ligacoes H', 'Secuencia': 'Sequencia',
+          'COLOCAR MARCADORES': 'INSERIR MARCADORES', 'Maximo': 'Maximo', 'Plano': 'Plano', 'Superficie': 'Superficie', 'Centrar': 'Centralizar', 'Punto': 'Ponto',
+          'AJUSTAR MARCADORES': 'AJUSTAR MARCADORES', 'Enlace': 'Ligacao', 'Mover': 'Mover', 'Redim.': 'Redim.', 'Eliminar': 'Excluir',
+          'MOVIMIENTO': 'MOVIMENTO', 'Seleccionar': 'Selecionar', 'Rotar': 'Girar', 'Trasladar': 'Transladar', 'Zoom': 'Zoom', 'Pivote': 'Pivo',
+          'ANOTACION': 'ANOTACAO', 'Distancia': 'Distancia', 'Etiqueta': 'Rotulo', 'Clave': 'Legenda',
+          'MAPA': 'MAPA', 'Contorno': 'Contorno', 'Recortar': 'Recortar', 'Mancha': 'Mancha', 'Borrar': 'Apagar'
+        }
+      },
+      fr: {
+        pills: ['Clair', 'Gris', 'Sombre', 'Langue ▾'],
+        menus: ['Fichier', 'Edition', 'Selectionner', 'Actions', 'Prereglages', 'Favoris', 'Outils', 'Aide'],
+        tabs: { inicio: 'Accueil', vista: 'Affichage Moleculaire', marcadores: 'Marqueurs', derecho: 'Clic Droit' },
+        canvas: 'Premiers pas',
+        logTitle: 'Historique des Commandes',
+        status: 'Liquid Glass UI actif (60 FPS)',
+        tr: {
+          'ARCHIVO': 'FICHIER', 'Abrir': 'Ouvrir', 'Recientes': 'Recents', 'Guardar': 'Enregistrer',
+          'IMAGENES': 'IMAGES', 'Captura': 'Capture', 'Giro': 'Rotation',
+          'ATOMOS': 'ATOMES', 'Mostrar': 'Afficher', 'Ocultar': 'Masquer',
+          'ESTILOS': 'STYLES', 'Varillas': 'Batons', 'Esferas': 'Spheres', 'Bolas': 'Boules',
+          'ILUMINACION': 'ECLAIRAGE', 'Simple': 'Simple', 'Suave': 'Doux', 'Completa': 'Complet',
+          'CINTAS': 'RUBANS', 'SUPERFICIES': 'SURFACES',
+          'COLORACION': 'COLORATION', 'Elemento': 'Element', 'Cadena': 'Chaine', 'Arcoiris': 'Arc-en-ciel', 'Electro': 'Electro', 'Factor B': 'Facteur B',
+          'ANALISIS': 'ANALYSE', 'Puentes H': 'Liaisons H', 'Secuencia': 'Sequence',
+          'COLOCAR MARCADORES': 'PLACER MARQUEURS', 'Maximo': 'Maximum', 'Plano': 'Plan', 'Superficie': 'Surface', 'Centrar': 'Centrer', 'Punto': 'Point',
+          'AJUSTAR MARCADORES': 'AJUSTER MARQUEURS', 'Enlace': 'Lien', 'Mover': 'Deplacer', 'Redim.': 'Redim.', 'Eliminar': 'Supprimer',
+          'MOVIMIENTO': 'MOUVEMENT', 'Seleccionar': 'Selectionner', 'Rotar': 'Tourner', 'Trasladar': 'Translater', 'Zoom': 'Zoom', 'Pivote': 'Pivot',
+          'ANOTACION': 'ANNOTATION', 'Distancia': 'Distance', 'Etiqueta': 'Etiquette', 'Clave': 'Legende',
+          'MAPA': 'CARTE', 'Contorno': 'Contour', 'Recortar': 'Rogner', 'Mancha': 'Tache', 'Borrar': 'Effacer'
+        }
+      },
+      de: {
+        pills: ['Hell', 'Grau', 'Dunkel', 'Sprache ▾'],
+        menus: ['Datei', 'Bearbeiten', 'Auswahlen', 'Aktionen', 'Voreinstellungen', 'Favoriten', 'Werkzeuge', 'Hilfe'],
+        tabs: { inicio: 'Start', vista: 'Molekulansicht', marcadores: 'Marker', derecho: 'Rechtsklick' },
+        canvas: 'Erste Schritte',
+        logTitle: 'Befehlsverlauf',
+        status: 'Liquid Glass UI aktiv (60 FPS)',
+        tr: {
+          'ARCHIVO': 'DATEI', 'Abrir': 'Offnen', 'Recientes': 'Zuletzt', 'Guardar': 'Speichern',
+          'IMAGENES': 'BILDER', 'Captura': 'Foto', 'Giro': 'Drehen',
+          'ATOMOS': 'ATOME', 'Mostrar': 'Zeigen', 'Ocultar': 'Verbergen',
+          'ESTILOS': 'STILE', 'Varillas': 'Stabe', 'Esferas': 'Kugeln', 'Bolas': 'Kugel-Stab',
+          'ILUMINACION': 'BELEUCHTUNG', 'Simple': 'Einfach', 'Suave': 'Weich', 'Completa': 'Voll',
+          'CINTAS': 'BANDER', 'SUPERFICIES': 'OBERFLACHEN',
+          'COLORACION': 'FARBUNG', 'Elemento': 'Element', 'Cadena': 'Kette', 'Arcoiris': 'Regenbogen', 'Electro': 'Elektro', 'Factor B': 'B-Faktor',
+          'ANALISIS': 'ANALYSE', 'Puentes H': 'H-Brucken', 'Secuencia': 'Sequenz',
+          'COLOCAR MARCADORES': 'MARKER SETZEN', 'Maximo': 'Maximum', 'Plano': 'Ebene', 'Superficie': 'Flache', 'Centrar': 'Zentrieren', 'Punto': 'Punkt',
+          'AJUSTAR MARCADORES': 'MARKER ANPASSEN', 'Enlace': 'Link', 'Mover': 'Bewegen', 'Redim.': 'Grosse', 'Eliminar': 'Loschen',
+          'MOVIMIENTO': 'BEWEGUNG', 'Seleccionar': 'Wahlen', 'Rotar': 'Drehen', 'Trasladar': 'Verschieben', 'Zoom': 'Zoom', 'Pivote': 'Pivot',
+          'ANOTACION': 'ANNOTATION', 'Distancia': 'Abstand', 'Etiqueta': 'Etikett', 'Clave': 'Farbskala',
+          'MAPA': 'KARTE', 'Contorno': 'Kontur', 'Recortar': 'Zuschneiden', 'Mancha': 'Blob', 'Borrar': 'Radieren'
+        }
+      },
+      zh: {
+        pills: ['浅色', '灰色', '深色', '语言 ▾'],
+        menus: ['文件', '编辑', '选择', '操作', '预设', '收藏', '工具', '帮助'],
+        tabs: { inicio: '主页', vista: '分子视图', marcadores: '标记', derecho: '右键模式' },
+        canvas: '快速入门',
+        logTitle: '命令历史',
+        status: 'Liquid Glass UI 已启用 (60 FPS)',
+        tr: {
+          'ARCHIVO': '文件', 'Abrir': '打开', 'Recientes': '最近', 'Guardar': '保存',
+          'IMAGENES': '图像', 'Captura': '截图', 'Giro': '旋转',
+          'ATOMOS': '原子', 'Mostrar': '显示', 'Ocultar': '隐藏',
+          'ESTILOS': '样式', 'Varillas': '棍状', 'Esferas': '球状', 'Bolas': '球棍',
+          'ILUMINACION': '光照', 'Simple': '简单', 'Suave': '柔和', 'Completa': '完整',
+          'CINTAS': '飘带', 'SUPERFICIES': '表面',
+          'COLORACION': '着色', 'Elemento': '元素', 'Cadena': '链', 'Arcoiris': '彩虹', 'Electro': '静电', 'Factor B': 'B因子',
+          'ANALISIS': '分析', 'Puentes H': '氢键', 'Secuencia': '序列',
+          'COLOCAR MARCADORES': '放置标记', 'Maximo': '极值', 'Plano': '平面', 'Superficie': '表面', 'Centrar': '居中', 'Punto': '点',
+          'AJUSTAR MARCADORES': '调整标记', 'Enlace': '连接', 'Mover': '移动', 'Redim.': '缩放', 'Eliminar': '删除',
+          'MOVIMIENTO': '移动', 'Seleccionar': '选择', 'Rotar': '旋转', 'Trasladar': '平移', 'Zoom': '缩放', 'Pivote': '枢轴',
+          'ANOTACION': '注释', 'Distancia': '距离', 'Etiqueta': '标签', 'Clave': '色标',
+          'MAPA': '密度图', 'Contorno': '等值面', 'Recortar': '裁剪', 'Mancha': '斑块', 'Borrar': '擦除'
+        }
+      }
+    };
+
+    function _tMock(str) {
+      const d = MOCK_I18N[currentMockLang];
+      return (d && d.tr && d.tr[str]) ? d.tr[str] : str;
+    }
+
+    function toggleMockLangMenu(ev) {
+      if (ev) ev.stopPropagation();
+      const m = document.getElementById('cxLangMenu');
+      m.classList.toggle('open');
+    }
+
+    document.addEventListener('click', () => {
+      const m = document.getElementById('cxLangMenu');
+      if (m) m.classList.remove('open');
+    });
+
+    function setMockLang(lang, ev) {
+      if (ev) ev.stopPropagation();
+      currentMockLang = lang;
+      const d = MOCK_I18N[lang] || MOCK_I18N.es;
+      document.getElementById('pillLight').textContent = d.pills[0];
+      document.getElementById('pillGray').textContent = d.pills[1];
+      document.getElementById('pillDark').textContent = d.pills[2];
+      document.getElementById('pillLang').textContent = d.pills[3];
+
+      const mb = document.getElementById('cxMenubar');
+      mb.innerHTML = d.menus.map(m => `<span>${m}</span>`).join('');
+
+      document.getElementById('tabInicio').textContent = d.tabs.inicio;
+      document.getElementById('tabVista').textContent = d.tabs.vista;
+      document.getElementById('tabMarcadores').textContent = d.tabs.marcadores;
+      document.getElementById('tabDerecho').textContent = d.tabs.derecho;
+      document.getElementById('cxCanvasLink').textContent = d.canvas;
+      document.getElementById('cxLogTitle').textContent = d.logTitle;
+      document.getElementById('cxLogCmd').textContent = '> ui language ' + lang;
+      document.getElementById('cxLogStatus').textContent = d.status;
+
+      document.querySelectorAll('.cx-lang-opt').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-lang') === lang);
+      });
+
+      document.getElementById('cxLangMenu').classList.remove('open');
+      switchMockTab(currentMockTab);
+    }
+
     function switchMockTab(tabKey) {
+      currentMockTab = tabKey;
       document.querySelectorAll('.cx-tab').forEach(el => {
         el.classList.toggle('active', el.getAttribute('data-tab') === tabKey);
       });
@@ -1572,12 +1825,12 @@
           <div class="cx-tb-btns">
             ${g.btns.map(b => `
               <div class="cx-tb-btn ${b[2] ? 'highlighted' : ''}">
-                <img src="${b[0]}" alt="${b[1]}">
-                <span>${b[1]}</span>
+                <img src="${b[0]}" alt="${_tMock(b[1])}">
+                <span>${_tMock(b[1])}</span>
               </div>
             `).join('')}
           </div>
-          <div class="cx-tb-sec-title">${g.sec}</div>
+          <div class="cx-tb-sec-title">${_tMock(g.sec)}</div>
         </div>
       `).join('');
     }
