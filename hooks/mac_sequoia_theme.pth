@@ -1,1 +1,1 @@
-import sys, os; _p = r"C:\Users\Parfion\chimerax_start"; _p not in sys.path and sys.path.insert(0, _p); import liquid_glass_theme
+import sys, os; p = os.path.normpath(os.path.expanduser('~/chimerax_start')); sys.path.insert(0, p) if os.path.isdir(p) and p not in sys.path else None; import liquid_glass_theme

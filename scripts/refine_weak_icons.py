@@ -877,15 +877,16 @@ ALIASES = {
     "resize_cursor.png": "mark_resize.png",
 }
 def main():
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     dirs_to_update = [
-        r"C:\Users\Parfion\Downloads\chimerax_mac_icons",
-        r"C:\Users\Parfion\chimerax_start\icons",
-        r"C:\Users\Parfion\Documents\GitHub\Chimera-X-\icons",
+        os.path.normpath(os.path.expanduser("~/Downloads/chimerax_mac_icons")),
+        os.path.normpath(os.path.expanduser("~/chimerax_start/icons")),
+        os.path.join(repo_root, "icons"),
     ]
     svg_dirs = [
-        r"C:\Users\Parfion\Downloads\chimerax_mac_icons",
-        r"C:\Users\Parfion\chimerax_start\icons",
-        r"C:\Users\Parfion\Documents\GitHub\Chimera-X-\svg",
+        os.path.normpath(os.path.expanduser("~/Downloads/chimerax_mac_icons")),
+        os.path.normpath(os.path.expanduser("~/chimerax_start/icons")),
+        os.path.join(repo_root, "svg"),
     ]
     generated_png_bytes = {}
     generated_svg_text = {}
@@ -910,7 +911,7 @@ def main():
             if os.path.exists(sd):
                 with open(os.path.join(sd, svg_name), "w", encoding="utf-8") as f:
                     f.write(generated_svg_text[svg_name])
-    src_icon_dir = r"C:\Users\Parfion\chimerax_start\icons"
+    src_icon_dir = os.path.normpath(os.path.expanduser("~/chimerax_start/icons"))
     for alias_png, target_png in ALIASES.items():
         png_bytes = generated_png_bytes.get(target_png)
         if png_bytes is None:
@@ -935,8 +936,8 @@ def main():
                     with open(os.path.join(sd, svg_name), "w", encoding="utf-8") as f:
                         f.write(generated_svg_text[svg_name])
     tree_roots = [
-        r"C:\Users\Parfion\Documents\GitHub\Chimera-X-\packages\chimerax",
-        r"C:\Users\Parfion\AppData\Local\UCSF\ChimeraX\1.12\Python311\site-packages\chimerax",
+        os.path.join(repo_root, "packages", "chimerax"),
+        os.path.normpath(os.path.expanduser("~/AppData/Local/UCSF/ChimeraX/1.12/Python311/site-packages/chimerax")),
     ]
     replaced_in_trees = 0
     for tr in tree_roots:

@@ -1,9 +1,9 @@
 import os
 import math
 from PIL import Image, ImageDraw, ImageFont
-DIR_ICONS_FLAT = r"C:\Users\Parfion\Downloads\chimerax_mac_icons"
-DIR_USER_SITE = r"C:\Users\Parfion\AppData\Local\UCSF\ChimeraX\1.12\Python311\site-packages\chimerax"
-DIR_GITHUB = r"C:\Users\Parfion\Documents\GitHub\Chimera-X-"
+DIR_ICONS_FLAT = os.path.normpath(os.path.expanduser("~/Downloads/chimerax_mac_icons"))
+DIR_USER_SITE = os.path.normpath(os.path.expanduser("~/AppData/Local/UCSF/ChimeraX/1.12/Python311/site-packages/chimerax"))
+DIR_GITHUB = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for d in [DIR_ICONS_FLAT, DIR_USER_SITE, DIR_GITHUB]:
     os.makedirs(d, exist_ok=True)
 PASTEL_BLUE = (142, 197, 252, 255)

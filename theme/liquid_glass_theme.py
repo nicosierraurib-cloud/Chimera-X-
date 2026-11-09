@@ -37,7 +37,7 @@ def _bootstrap_standalone_and_launch(launch=True):
                     if fn.lower().endswith((".png", ".svg")):
                         sp = os.path.join(src, fn)
                         dp = os.path.join(icons_dir, fn)
-                        if os.path.isfile(sp) and not os.path.exists(dp):
+                        if os.path.isfile(sp) and not os.path.islink(sp) and not os.path.exists(dp):
                             shutil.copy2(sp, dp)
             except Exception:
                 pass
@@ -54,9 +54,9 @@ def _bootstrap_standalone_and_launch(launch=True):
     else:
         site_dirs.extend(glob.glob(os.path.expanduser("~/.local/share/ChimeraX/*/site-packages")))
     pth_line = (
-        f"import sys, os; p = r'{start_dir}'; "
-        f"sys.path.insert(0, p) if os.path.exists(p) and p not in sys.path else None; "
-        f"import liquid_glass_theme\n"
+        "import sys, os; p = os.path.normpath(os.path.expanduser('~/chimerax_start')); "
+        "sys.path.insert(0, p) if os.path.isdir(p) and p not in sys.path else None; "
+        "import liquid_glass_theme\n"
     )
     for sd in site_dirs:
         if os.path.isdir(sd):
@@ -586,11 +586,10 @@ try:
 except Exception:
     pass
 _CANDIDATE_ICON_DIRS = (
-    os.path.expanduser("~/chimerax_start/icons"),
-    r"C:\Users\Parfion\chimerax_start\icons",
-    r"C:\Users\Parfion\Downloads\chimerax_mac_icons",
-    os.path.expanduser("~/Downloads/chimerax_mac_icons"),
+    os.path.normpath(os.path.expanduser("~/chimerax_start/icons")),
+    os.path.normpath(os.path.expanduser("~/Downloads/chimerax_mac_icons")),
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons") if "__file__" in globals() else "",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "icons") if "__file__" in globals() else "",
 )
 ICONS_DIR = next((d for d in _CANDIDATE_ICON_DIRS if d and os.path.exists(d)), _CANDIDATE_ICON_DIRS[0])
 _EXISTING_ICONS = frozenset(os.listdir(ICONS_DIR)) if os.path.exists(ICONS_DIR) else frozenset()
@@ -3699,7 +3698,7 @@ def apply_theme(session=None, mode=None, force_bg=True):
                 pass
         session._mac_triggers_added = True
     if session:
-        theme_file = r"C:\Users\Parfion\chimerax_start\liquid_glass_theme.py"
+        theme_file = os.path.normpath(os.path.expanduser("~/chimerax_start/liquid_glass_theme.py"))
         if os.path.exists(theme_file):
             old_w = getattr(session, "_mac_file_watcher", None)
             if is_cpp_valid(old_w):
@@ -3749,7 +3748,7 @@ def reload_theme_from_disk(session=None, mode=None):
     if mode is not None:
         set_current_mode(mode)
     def _do_reload():
-        theme_file = r"C:\Users\Parfion\chimerax_start\liquid_glass_theme.py"
+        theme_file = os.path.normpath(os.path.expanduser("~/chimerax_start/liquid_glass_theme.py"))
         if os.path.exists(theme_file):
             try:
                 with open(theme_file, "r", encoding="utf-8") as f:

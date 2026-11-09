@@ -1,5 +1,5 @@
 import os
-SVG_DIR = r"C:\Users\Parfion\Documents\GitHub\Chimera-X-\svg"
+SVG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "svg")
 os.makedirs(SVG_DIR, exist_ok=True)
 P_BLUE = "#8EC5FC"
 P_CORAL = "#FF9AA2"

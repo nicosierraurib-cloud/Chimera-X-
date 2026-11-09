@@ -41,14 +41,17 @@ def copy_directory_files(src_dir, dst_dir, allowed_exts=None):
         return 0
     os.makedirs(dst_dir, exist_ok=True)
     count = 0
-    for root, _, files in os.walk(src_dir):
+    for root, _, files in os.walk(src_dir, followlinks=False):
         rel = os.path.relpath(root, src_dir)
         target_root = dst_dir if rel == "." else os.path.join(dst_dir, rel)
         for fname in files:
             if allowed_exts and not fname.lower().endswith(allowed_exts):
                 continue
+            src_f = os.path.join(root, fname)
+            if os.path.islink(src_f):
+                continue
             os.makedirs(target_root, exist_ok=True)
-            shutil.copy2(os.path.join(root, fname), os.path.join(target_root, fname))
+            shutil.copy2(src_f, os.path.join(target_root, fname))
             count += 1
     return count
 def main():
@@ -59,16 +62,16 @@ def main():
     os.makedirs(start_dir, exist_ok=True)
     src_theme = os.path.join(repo_root, "theme", "liquid_glass_theme.py")
     dst_theme = os.path.join(start_dir, "liquid_glass_theme.py")
-    if os.path.exists(src_theme):
+    if os.path.exists(src_theme) and not os.path.islink(src_theme):
         shutil.copy2(src_theme, dst_theme)
     for folder in ("icons", "svg"):
         src_folder = os.path.join(repo_root, folder)
         copy_directory_files(src_folder, icons_dest_primary, (".png", ".svg"))
         copy_directory_files(src_folder, icons_dest_secondary, (".png", ".svg"))
     pth_line = (
-        f"import sys, os; p = r'{start_dir}'; "
-        f"sys.path.insert(0, p) if os.path.exists(p) and p not in sys.path else None; "
-        f"import liquid_glass_theme\n"
+        "import sys, os; p = os.path.normpath(os.path.expanduser('~/chimerax_start')); "
+        "sys.path.insert(0, p) if os.path.isdir(p) and p not in sys.path else None; "
+        "import liquid_glass_theme\n"
     )
     site_packages_list = find_chimerax_site_packages()
     pkg_src = os.path.join(repo_root, "packages", "chimerax")
