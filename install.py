@@ -2,12 +2,17 @@ import os
 import sys
 import glob
 import shutil
+import subprocess
 def find_chimerax_site_packages():
     candidates = []
     if sys.platform == "win32":
         local_app = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
         pattern = os.path.join(local_app, "UCSF", "ChimeraX", "*", "Python*", "site-packages")
         candidates.extend(glob.glob(pattern))
+        if not candidates:
+            fallback_sp = os.path.join(local_app, "UCSF", "ChimeraX", "1.12", "Python311", "site-packages")
+            os.makedirs(fallback_sp, exist_ok=True)
+            candidates.append(fallback_sp)
     elif sys.platform == "darwin":
         pattern = os.path.expanduser("~/Library/Application Support/ChimeraX/*/site-packages")
         candidates.extend(glob.glob(pattern))
@@ -15,6 +20,22 @@ def find_chimerax_site_packages():
         pattern = os.path.expanduser("~/.local/share/ChimeraX/*/site-packages")
         candidates.extend(glob.glob(pattern))
     return [p for p in candidates if os.path.isdir(p)]
+def find_chimerax_executable():
+    bins = []
+    if sys.platform == "win32":
+        for base in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("LOCALAPPDATA", "")):
+            if base:
+                bins.extend(sorted(glob.glob(os.path.join(base, "ChimeraX*", "bin", "ChimeraX.exe")), reverse=True))
+    elif sys.platform == "darwin":
+        bins.extend(sorted(glob.glob("/Applications/ChimeraX*.app/Contents/MacOS/ChimeraX"), reverse=True))
+    else:
+        w = shutil.which("chimerax")
+        if w:
+            bins.append(w)
+    for b in bins:
+        if os.path.isfile(b):
+            return b
+    return None
 def copy_directory_files(src_dir, dst_dir, allowed_exts=None):
     if not os.path.exists(src_dir):
         return 0
@@ -57,5 +78,12 @@ def main():
             f.write(pth_line)
         if os.path.exists(pkg_src):
             copy_directory_files(pkg_src, os.path.join(sp, "chimerax"), (".png", ".svg"))
+    if "--no-launch" not in sys.argv:
+        cx_bin = find_chimerax_executable()
+        if cx_bin:
+            try:
+                subprocess.Popen([cx_bin], close_fds=True)
+            except Exception:
+                pass
 if __name__ == "__main__":
     main()

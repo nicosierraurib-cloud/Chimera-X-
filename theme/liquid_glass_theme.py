@@ -1,10 +1,99 @@
 import os
 import sys
 import gc
+import glob
 import math
 import time
+import shutil
 import ctypes
+import subprocess
 from functools import lru_cache
+def _bootstrap_standalone_and_launch(launch=True):
+    start_dir = os.path.expanduser("~/chimerax_start")
+    icons_dir = os.path.join(start_dir, "icons")
+    os.makedirs(icons_dir, exist_ok=True)
+    self_path = os.path.abspath(__file__) if "__file__" in globals() else ""
+    dst_theme = os.path.join(start_dir, "liquid_glass_theme.py")
+    if self_path and os.path.isfile(self_path):
+        try:
+            if os.path.normcase(self_path) != os.path.normcase(dst_theme):
+                shutil.copy2(self_path, dst_theme)
+        except Exception:
+            pass
+    here = os.path.dirname(self_path) if self_path else os.getcwd()
+    candidate_icon_srcs = [
+        os.path.join(here, "icons"),
+        os.path.join(here, "svg"),
+        os.path.join(os.path.dirname(here), "icons"),
+        os.path.join(os.path.dirname(here), "svg"),
+        os.path.expanduser("~/Downloads/chimerax_mac_icons"),
+        os.path.expanduser("~/Documents/GitHub/Chimera-X-/icons"),
+        os.path.expanduser("~/Documents/GitHub/Chimera-X-/svg"),
+    ]
+    for src in candidate_icon_srcs:
+        if os.path.isdir(src) and os.path.normcase(src) != os.path.normcase(icons_dir):
+            try:
+                for fn in os.listdir(src):
+                    if fn.lower().endswith((".png", ".svg")):
+                        sp = os.path.join(src, fn)
+                        dp = os.path.join(icons_dir, fn)
+                        if os.path.isfile(sp) and not os.path.exists(dp):
+                            shutil.copy2(sp, dp)
+            except Exception:
+                pass
+    site_dirs = []
+    if sys.platform == "win32":
+        local_app = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
+        site_dirs.extend(glob.glob(os.path.join(local_app, "UCSF", "ChimeraX", "*", "Python*", "site-packages")))
+        if not site_dirs:
+            fallback_sp = os.path.join(local_app, "UCSF", "ChimeraX", "1.12", "Python311", "site-packages")
+            os.makedirs(fallback_sp, exist_ok=True)
+            site_dirs.append(fallback_sp)
+    elif sys.platform == "darwin":
+        site_dirs.extend(glob.glob(os.path.expanduser("~/Library/Application Support/ChimeraX/*/site-packages")))
+    else:
+        site_dirs.extend(glob.glob(os.path.expanduser("~/.local/share/ChimeraX/*/site-packages")))
+    pth_line = (
+        f"import sys, os; p = r'{start_dir}'; "
+        f"sys.path.insert(0, p) if os.path.exists(p) and p not in sys.path else None; "
+        f"import liquid_glass_theme\n"
+    )
+    for sd in site_dirs:
+        if os.path.isdir(sd):
+            try:
+                with open(os.path.join(sd, "mac_sequoia_theme.pth"), "w", encoding="utf-8") as f:
+                    f.write(pth_line)
+            except Exception:
+                pass
+    if not launch or "--no-launch" in sys.argv:
+        return
+    cx_bins = []
+    if sys.platform == "win32":
+        for base in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("LOCALAPPDATA", "")):
+            if base:
+                cx_bins.extend(sorted(glob.glob(os.path.join(base, "ChimeraX*", "bin", "ChimeraX.exe")), reverse=True))
+    elif sys.platform == "darwin":
+        cx_bins.extend(sorted(glob.glob("/Applications/ChimeraX*.app/Contents/MacOS/ChimeraX"), reverse=True))
+    else:
+        w = shutil.which("chimerax")
+        if w:
+            cx_bins.append(w)
+    for b in cx_bins:
+        if os.path.isfile(b):
+            try:
+                subprocess.Popen([b], close_fds=True)
+            except Exception:
+                pass
+            break
+if __name__ == "__main__" and "session" not in globals():
+    _bootstrap_standalone_and_launch(launch=True)
+    raise SystemExit(0)
+elif "__file__" in globals():
+    try:
+        if os.path.normcase(os.path.abspath(__file__)) != os.path.normcase(os.path.expanduser("~/chimerax_start/liquid_glass_theme.py")):
+            _bootstrap_standalone_and_launch(launch=False)
+    except Exception:
+        pass
 from Qt import QtWidgets, QtGui, QtCore
 from chimerax.core.commands import register, CmdDesc, StringArg, run
 from chimerax.core.colors import set_default_color_scheme
