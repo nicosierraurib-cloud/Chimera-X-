@@ -1,4 +1,4 @@
-# UCSF ChimeraX — Liquid Glass UI
+# UCSF ChimeraX 
 
 Subsistema Qt6/QSS, motor i18n e iconografia vectorial para **UCSF ChimeraX** (1.11+).
 
