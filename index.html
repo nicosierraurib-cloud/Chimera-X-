@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-In1JPt4mvm9cnakgtKkLKcuQudeVeUY7xbn1F+BoKCc=' 'sha256-7vEakkMLBrR0rMuwZe+7e5bQzijR0xSOQlMbTWpsQ6I=' 'strict-dynamic' 'report-sample'; style-src 'sha256-md8V+6d4NYnDppgNN0BSjPdHGKPLgEi4tmiFpNkmkWI=' 'sha256-MBVjnPpMAbFRNTRKhXbe3LXRsmtL1RT0d+RWJcgPyEM='; img-src 'self' data:; connect-src 'none'; font-src 'none'; object-src 'none'; media-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types default;">
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Sj7HDu21BcDsibmnpKp6xFJimBhrqwuwPrNqWWGLGDE=' 'sha256-OeynAzpIj+w0+6NGLGv0LEuLPaonoIvlepa0BevAKms='; style-src 'sha256-md8V+6d4NYnDppgNN0BSjPdHGKPLgEi4tmiFpNkmkWI=' 'sha256-MBVjnPpMAbFRNTRKhXbe3LXRsmtL1RT0d+RWJcgPyEM='; img-src 'self' data:; connect-src 'none'; font-src 'none'; object-src 'none'; media-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none';">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
-  <meta http-equiv="Permissions-Policy" content="accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), cross-origin-isolated=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), navigation-override=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=(), clipboard-read=(), clipboard-write=(), gamepad=(), hid=(), idle-detection=(), interest-cohort=(), serial=(), trust-token-redemption=(), unload=(), window-placement=()">
+  <meta http-equiv="Permissions-Policy" content="accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), cross-origin-isolated=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), focus-without-user-activation=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), navigation-override=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=(), clipboard-read=(), clipboard-write=(), gamepad=(), hid=(), idle-detection=(), interest-cohort=(), serial=(), trust-token-redemption=(), unload=(), window-placement=()">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>UCSF ChimeraX — Liquid Glass UI &amp; Vector Subsystem</title>
   <style>
@@ -1553,6 +1553,12 @@
       try { window.top.location = window.self.location; } catch (_) {}
       document.documentElement.replaceChildren();
       throw new Error('Framing blocked by security policy');
+    }
+
+    if (!window.trustedTypes) {
+      window.trustedTypes = {
+        createPolicy: function(name, rules) { return rules; }
+      };
     }
 
     if (window.trustedTypes && window.trustedTypes.createPolicy) {
