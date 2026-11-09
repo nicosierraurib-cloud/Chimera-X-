@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-In1JPt4mvm9cnakgtKkLKcuQudeVeUY7xbn1F+BoKCc=' 'sha256-7vEakkMLBrR0rMuwZe+7e5bQzijR0xSOQlMbTWpsQ6I=' 'strict-dynamic' 'report-sample'; style-src 'sha256-md8V+6d4NYnDppgNN0BSjPdHGKPLgEi4tmiFpNkmkWI=' 'sha256-MBVjnPpMAbFRNTRKhXbe3LXRsmtL1RT0d+RWJcgPyEM='; img-src 'self' data:; connect-src 'none'; font-src 'none'; object-src 'none'; media-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types default;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-VF8wpCNe7ZHEuAhi+MXfBGhE/gjrrNSWDQuN02VnX7M=' 'sha256-ogGmaXLUfteLl4xKvvxVZ69w9xQLPb0tKPyde2z8RUI=' 'strict-dynamic' 'report-sample'; style-src 'sha256-5jpGs+/D/7Dvmyf2I5ac0tW/+q4HZidOtJw1wMAESzY=' 'sha256-OXEdSt1vK1NaC/Kb21T3XQTYNarcncsKG4D17KGBER8='; img-src 'self' data:; connect-src 'none'; font-src 'none'; object-src 'none'; media-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types default;">
   <meta charset="UTF-8">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
@@ -1080,6 +1080,10 @@
       font-weight: 700;
     }
 
+    .dl-toast-icon.err {
+      color: #FF5F56;
+    }
+
     @keyframes spinArc {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -1119,7 +1123,6 @@
       <div class="brand-logo-wrap">
         <span class="brand-title">UCSF ChimeraX</span>
         <span class="brand-sub">v1.12 • Liquid Glass</span>
-        <span class="sec-shield-pill" data-verify-sha="1" title="Haz clic para ejecutar auditoria SHA-256 en el navegador">CSP + SHA-256 LOCKED</span>
       </div>
     </div>
     <div class="nav-actions">
@@ -1217,17 +1220,12 @@
         <span class="hero-meta-dot">&bull;</span>
         <span>Windows / macOS / Linux</span>
       </div>
-
-      <div class="hero-hash-bar">
-        <span>SHA-256: a1b286aadaeaaf81a0e526d6&hellip;928710197640</span>
-        <button class="hash-verify-btn" data-verify-sha="1">Verificar Integridad</button>
-      </div>
     </div>
   </section>
 
   <!-- TECHNICAL SPECS STRIP -->
   <section class="specs-strip">
-    <div class="specs-strip-label">ESPECIFICACIONES Y SEGURIDAD DEL SUBSISTEMA</div>
+    <div class="specs-strip-label">ESPECIFICACIONES DE INGENIERIA DEL SUBSISTEMA</div>
     <div class="specs-strip-logos">
       <div class="spec-badge">
         <span class="spec-badge-pill">Qt6</span>
@@ -1242,8 +1240,8 @@
         <span>ICONOS 128PX</span>
       </div>
       <div class="spec-badge">
-        <span class="spec-badge-pill">CSP</span>
-        <span>SHA-256 STRICT</span>
+        <span class="spec-badge-pill">60Hz</span>
+        <span>FRAME SYNC</span>
       </div>
       <div class="spec-badge">
         <span class="spec-badge-pill">i18n</span>
@@ -1257,7 +1255,7 @@
     <div class="section-header">
       <h2 class="section-title">Arquitectura modular de inyeccion y arranque directo</h2>
       <p class="section-desc">
-        Un unico archivo ejecutable verificado por SHA-256 sincroniza el motor visual, reemplaza la totalidad de proveedores de barra de herramientas y lanza UCSF ChimeraX.
+        Un unico archivo ejecutable sincroniza el motor visual, reemplaza la totalidad de proveedores de barra de herramientas y lanza UCSF ChimeraX.
       </p>
     </div>
 
@@ -1397,7 +1395,7 @@
         <div>
           <h3 class="card-title">Lanzador Directo por Plataforma</h3>
           <p class="card-desc">
-            Cada descarga ejecuta una verificacion criptografica SHA-256 en tiempo real antes de emitir el binario <code>.py</code>. Al abrirlo, instala el subsistema e inicia ChimeraX.
+            El script <code>ChimeraX_LiquidGlass.py</code> detecta automaticamente la ruta de <code>site-packages</code>, inyecta <code>mac_sequoia_theme.pth</code> y ejecuta el binario de ChimeraX al abrirlo.
           </p>
 
           <div class="action-list">
@@ -1442,7 +1440,7 @@
         <div class="mini-preview-box">
           <div class="mini-hdr-row">
             <span class="mini-hdr-title">MacLoadingOverlay &bull; Telemetria de Arranque</span>
-            <span class="mini-hdr-badge">SHA-256 OK</span>
+            <span class="mini-hdr-badge">ACTIVO</span>
           </div>
           <div class="loading-sim-bar-track">
             <div class="loading-sim-bar-fill"></div>
@@ -1457,9 +1455,9 @@
       <!-- BOTTOM RIGHT CARD -->
       <article class="bento-card glow-cool">
         <div>
-          <h3 class="card-title">Mapeo de Archivos e Integridad</h3>
+          <h3 class="card-title">Mapeo de Archivos y Compilacion</h3>
           <p class="card-desc">
-            Compilacion parametrica desde lienzos <code>512x512</code> a <code>128x128</code> RGBA mediante filtro LANCZOS. Politica CSP estricta por hash sin conexiones externas.
+            Compilacion parametrica desde lienzos <code>512x512</code> a <code>128x128</code> RGBA mediante filtro LANCZOS. Acceso directo a los modulos del repositorio.
           </p>
 
           <button class="pill-btn" data-dl="installer">
@@ -1537,12 +1535,12 @@
   </main>
 
   <footer class="site-footer">
-    UCSF ChimeraX — Liquid Glass UI &amp; Vector Subsystem &bull; CSP SHA-256 Locked &bull; Launcher SHA-256: a1b286aadaeaaf81&hellip; &bull; Installer SHA-256: 12cbd3c8857483b2&hellip;
+    UCSF ChimeraX — Liquid Glass UI &amp; Vector Subsystem &bull; Python 3.11 / Qt6 / PyQt6 &bull; Resolucion 128x128 RGBA LANCZOS
   </footer>
 
   <div class="dl-toast" id="dlToast" role="status" aria-live="polite">
     <span class="dl-toast-icon" id="dlToastIcon">&#10003;</span>
-    <span id="dlToastText">Verificando SHA-256...</span>
+    <span id="dlToastText">Descarga iniciada: ChimeraX_LiquidGlass.py</span>
   </div>
 
   <script>
@@ -1703,7 +1701,7 @@
       const ico = document.getElementById('dlToastIcon');
       if (!t || !txt || !ico) return;
       ico.textContent = isError ? '✕' : '✓';
-      ico.style.color = isError ? '#FF5F56' : '#30D158';
+      ico.classList.toggle('err', Boolean(isError));
       txt.textContent = msg;
       t.classList.add('visible');
       clearTimeout(window._toastTimer);
@@ -1729,19 +1727,9 @@
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
         }, 250);
-        showToast('SHA-256 Verificado [' + verified.sha256.slice(0, 12) + '…] — Descargado: ' + filename, false);
-      } catch (err) {
-        showToast('Descarga bloqueada por seguridad: ' + (err && err.message ? err.message : 'Error'), true);
-      }
-    }
-
-    async function runFullIntegrityAudit() {
-      try {
-        const v1 = await computeVerifiedBytes('launcher');
-        const v2 = await computeVerifiedBytes('installer');
-        showToast('Auditoria SHA-256 OK • Launcher: ' + v1.sha256.slice(0, 10) + '… • Installer: ' + v2.sha256.slice(0, 10) + '…', false);
-      } catch (err) {
-        showToast('Alerta de integridad: ' + (err && err.message ? err.message : 'Fallo'), true);
+        showToast('Descarga iniciada: ' + filename + ' — abrelo para iniciar ChimeraX', false);
+      } catch (_) {
+        showToast('No se pudo procesar el archivo.', true);
       }
     }
 
@@ -2141,13 +2129,6 @@
     document.querySelectorAll('.cx-lang-opt').forEach(function(el) {
       el.addEventListener('click', function(ev) {
         setMockLang(el.getAttribute('data-lang'), ev);
-      });
-    });
-
-    document.querySelectorAll('[data-verify-sha]').forEach(function(el) {
-      el.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        runFullIntegrityAudit();
       });
     });
 
