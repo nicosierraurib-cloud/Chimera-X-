@@ -76,7 +76,7 @@ Chimera-X-/
 ```text
 ~/chimerax_start/
 ├── liquid_glass_theme.py
-├── theme_mode.txt                          # light | gray | dark
+├── theme_mode.txt                          # gray | dark
 ├── language.txt                            # en_US | zh_CN | es_LA | hi_IN | ar_SA | fr_FR
 └── icons/
 
@@ -99,16 +99,10 @@ liquid_glass_theme
 ├── Estado
 │   ├── _MODE_STATE_FILE                    -> ~/chimerax_start/theme_mode.txt
 │   ├── _LANG_STATE_FILE                    -> ~/chimerax_start/language.txt
-│   ├── _CURRENT_MODE                       -> "light" | "gray" | "dark"
+│   ├── _CURRENT_MODE                       -> "gray" | "dark"
 │   └── _CURRENT_LANG                       -> "en_US" | "zh_CN" | "es_LA" | "hi_IN" | "ar_SA" | "fr_FR"
 │
 ├── Paletas (_THEME_PALETTES)
-│   ├── light
-│   │   ├── win_bg / card_bg                -> #F5F5F7 / #FFFFFF
-│   │   ├── header_bg / border / sep_color  -> #F0F3F9 / #D5DFEE / #BACBE6
-│   │   ├── text / accent / silhouette      -> #1D1D1F / #007AFF / #3A3A3C
-│   │   ├── canvas_rgb / sideview_rgb       -> (0.961, 0.961, 0.969, 1.0) / (1.0, 1.0, 1.0, 1.0)
-│   │   └── dwm (dark, caption, text)       -> (0, 0x00F7F5F5, 0x001F1D1D)
 │   ├── gray
 │   │   ├── win_bg / card_bg                -> #D5DBE5 / #E4E8F0
 │   │   ├── header_bg / border / sep_color  -> #C8D0DE / #AEB9CC / #8FA3C2
@@ -180,8 +174,8 @@ import sys, os; p = r'<RUTA_ABSOLUTA_A_CHIMERAX_START>'; sys.path.insert(0, p) i
 
 ## Comandos
 
-* **Cabecera UI:** `Light` | `Gray` | `Dark` | `Language` (`en_US`, `zh_CN`, `es_LA`, `hi_IN`, `ar_SA`, `fr_FR`).
-* **Consola ChimeraX:** `theme light` | `theme gray` | `theme dark`.
+* **Cabecera UI:** `Gray` | `Dark` | `Language` (`en_US`, `zh_CN`, `es_LA`, `hi_IN`, `ar_SA`, `fr_FR`).
+* **Consola ChimeraX:** `theme gray` | `theme dark`.
 
 ## Licencia
 

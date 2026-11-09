@@ -145,10 +145,8 @@ def _load_saved_mode():
                 val = f.read().strip().lower()
             if val in ("dark", "oscuro", "night"):
                 return "dark"
-            if val in ("gray", "gris"):
+            if val in ("gray", "gris", "light", "claro", "blanco"):
                 return "gray"
-            if val in ("light", "claro", "blanco"):
-                return "light"
     except Exception:
         pass
     return _detect_system_theme()
@@ -485,40 +483,6 @@ def apply_language(session=None, lang_code=None):
                 hero.update()
         mw.update()
 _THEME_PALETTES = {
-    "light": {
-        "win_bg": "#F5F5F7",
-        "viewport_bg": "#F5F5F7",
-        "card_bg": "#FFFFFF",
-        "alt_bg": "#F9FAFC",
-        "header_bg": "#F0F3F9",
-        "border": "#D5DFEE",
-        "border_soft": "#E2E8F2",
-        "sep_color": "#BACBE6",
-        "text": "#1D1D1F",
-        "text_hover": "#000000",
-        "text_muted": "rgba(60, 60, 67, 0.65)",
-        "btn_bg": "#F4F6FB",
-        "btn_hover": "#E8EEF8",
-        "btn_pressed": "#DCE5F4",
-        "menu_btn_bg": "#FFFFFF",
-        "tab_unselected": "rgba(186, 203, 230, 0.22)",
-        "tab_hover": "rgba(186, 203, 230, 0.40)",
-        "accent": "#007AFF",
-        "code_bg": "#F4F7FC",
-        "table_th_bg": "#F2F5FA",
-        "scroll_thumb": "rgba(142, 158, 184, 0.45)",
-        "scroll_hover": "rgba(110, 130, 165, 0.70)",
-        "canvas_rgb": (0.961, 0.961, 0.969, 1.0),
-        "sideview_rgb": (1.0, 1.0, 1.0, 1.0),
-        "status_bg": (0.961, 0.961, 0.969, 1.0),
-        "status_text": (29, 29, 31, 255),
-        "silhouette_color": "#3A3A3C",
-        "dwm_dark": 0,
-        "dwm_caption": 0x00F7F5F5,
-        "dwm_text": 0x001F1D1D,
-        "scheme": "light",
-        "qcolor_bg": (245, 245, 247),
-    },
     "gray": {
         "win_bg": "#D5DBE5",
         "viewport_bg": "#D5DBE5",
@@ -596,8 +560,6 @@ def normalize_mode(mode):
     if not mode:
         return "gray"
     m = str(mode).lower().strip()
-    if m in ("light", "claro", "blanco", "white"):
-        return "light"
     if m in ("dark", "oscuro", "night", "negro", "black"):
         return "dark"
     return "gray"
@@ -1824,7 +1786,7 @@ class MacWindowHeader(QtWidgets.QWidget):
         layout.addWidget(self.title_lbl)
         layout.addStretch()
         self._mode_btns = {}
-        for mode_key, label_text in (("light", "Claro"), ("gray", "Gris"), ("dark", "Oscuro")):
+        for mode_key, label_text in (("gray", "Gris"), ("dark", "Oscuro")):
             mb = QtWidgets.QPushButton(label_text, self)
             mb.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             mb.setFixedHeight(20)
@@ -1862,7 +1824,7 @@ class MacWindowHeader(QtWidgets.QWidget):
                 self.title_lbl.setStyleSheet(f"color: {pal['text']}; font-size: 13px; font-weight: 600; background: transparent; border: none;")
             cur_m = get_current_mode()
             cur_lang = get_current_language()
-            for m_key, canonical_title in (("light", "Light"), ("gray", "Gray"), ("dark", "Dark")):
+            for m_key, canonical_title in (("gray", "Gray"), ("dark", "Dark")):
                 btn = getattr(self, "_mode_btns", {}).get(m_key)
                 if not is_cpp_valid(btn):
                     continue
@@ -2121,7 +2083,7 @@ def install_window_traffic_lights(session=None):
         except Exception:
             pass
         existing_hdr = getattr(win, "_mac_header_widget", None)
-        if is_cpp_valid(existing_hdr) and existing_hdr.__class__ is not MacWindowHeader:
+        if is_cpp_valid(existing_hdr) and (existing_hdr.__class__ is not MacWindowHeader or "light" in getattr(existing_hdr, "_mode_btns", {})):
             try:
                 new_hdr = MacWindowHeader(existing_mw, session_getter=lambda: _resolve_session(session))
                 lay = getattr(existing_mw, "_vbox", None) or existing_mw.layout()
